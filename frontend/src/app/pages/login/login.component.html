@@ -1,0 +1,15 @@
+<h2>Login</h2>
+
+<mat-form-field appearance="outline">
+  <mat-label>Correo</mat-label>
+  <input matInput [(ngModel)]="correo">
+</mat-form-field>
+
+<mat-form-field appearance="outline">
+  <mat-label>Clave</mat-label>
+  <input matInput type="password" [(ngModel)]="clave">
+</mat-form-field>
+
+<button mat-raised-button color="primary" (click)="login()">Ingresar</button>
+
+<mat-error *ngIf="error">{{error}}</mat-error>

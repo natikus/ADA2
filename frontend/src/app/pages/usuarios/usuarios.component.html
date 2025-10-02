@@ -1,0 +1,30 @@
+<div class="p-6">
+  <h2>Usuarios</h2>
+
+  <form (ngSubmit)="crear()" class="mb-4">
+    <mat-form-field appearance="outline">
+      <mat-label>Correo</mat-label>
+      <input matInput [(ngModel)]="correo" name="correo" required>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Clave</mat-label>
+      <input matInput type="password" [(ngModel)]="clave" name="clave" required>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre a mostrar</mat-label>
+      <input matInput [(ngModel)]="nombre_mostrar" name="nombre_mostrar" required>
+    </mat-form-field>
+
+    <button mat-raised-button color="primary">Crear</button>
+  </form>
+
+  <mat-error *ngIf="error">{{error}}</mat-error>
+
+  <mat-list>
+    <mat-list-item *ngFor="let u of usuarios()">
+      {{u.id_usuario}} · {{u.correo}} — {{u.nombre_mostrar}}
+    </mat-list-item>
+  </mat-list>
+</div>

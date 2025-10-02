@@ -1,0 +1,26 @@
+<h2>Libros</h2>
+
+<mat-form-field appearance="outline">
+  <mat-label>Título</mat-label>
+  <input matInput [(ngModel)]="titulo">
+</mat-form-field>
+
+<mat-form-field appearance="outline">
+  <mat-label>Autor</mat-label>
+  <input matInput [(ngModel)]="autor">
+</mat-form-field>
+
+<mat-form-field appearance="outline">
+  <mat-label>Año</mat-label>
+  <input matInput type="number" [(ngModel)]="anio_publicacion">
+</mat-form-field>
+
+<button mat-raised-button color="primary" (click)="crear()">Crear</button>
+
+<mat-error *ngIf="error">{{error}}</mat-error>
+
+<mat-list>
+  <mat-list-item *ngFor="let l of libros()">
+    {{l.id_libro}} · {{l.titulo}} — {{l.autor}} ({{l.anio_publicacion}})
+  </mat-list-item>
+</mat-list>

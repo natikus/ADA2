@@ -1,0 +1,10 @@
+<h2>Solicitudes</h2>
+<mat-error *ngIf="error">{{error}}</mat-error>
+
+<mat-list>
+  <mat-list-item *ngFor="let s of solicitudes()">
+    {{s.id_solicitud}} · Estado: {{s.estado}}
+    <button mat-button color="primary" (click)="aceptar(s.id_solicitud)">Aceptar</button>
+    <button mat-button color="warn" (click)="rechazar(s.id_solicitud)">Rechazar</button>
+  </mat-list-item>
+</mat-list>

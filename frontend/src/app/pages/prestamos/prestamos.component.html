@@ -1,0 +1,9 @@
+<h2>Préstamos</h2>
+<mat-error *ngIf="error">{{error}}</mat-error>
+
+<mat-list>
+  <mat-list-item *ngFor="let p of prestamos()">
+    {{p.titulo}} — {{p.autor}} · Estado: {{p.estado}}
+    <button mat-button color="warn" (click)="devolver(p.id_prestamo)">Devolver</button>
+  </mat-list-item>
+</mat-list>
