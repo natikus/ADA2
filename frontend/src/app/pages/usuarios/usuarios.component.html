@@ -1,30 +1,56 @@
-<div class="p-6">
-  <h2>Usuarios</h2>
+<div class="page">
+  <h2 class="page__title">Usuarios</h2>
 
-  <form (ngSubmit)="crear()" class="mb-4">
-    <mat-form-field appearance="outline">
-      <mat-label>Correo</mat-label>
-      <input matInput [(ngModel)]="correo" name="correo" required>
-    </mat-form-field>
+  <!-- Card del formulario -->
+  <mat-card class="card">
+    <form (ngSubmit)="crear()" #f="ngForm" class="row" style="flex-wrap: wrap; gap:12px;">
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Correo</mat-label>
+        <input matInput type="email" [(ngModel)]="correo" name="correo" required autocomplete="email" />
+      </mat-form-field>
 
-    <mat-form-field appearance="outline">
-      <mat-label>Clave</mat-label>
-      <input matInput type="password" [(ngModel)]="clave" name="clave" required>
-    </mat-form-field>
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Clave</mat-label>
+        <input matInput type="password" [(ngModel)]="clave" name="clave" required autocomplete="new-password" />
+      </mat-form-field>
 
-    <mat-form-field appearance="outline">
-      <mat-label>Nombre a mostrar</mat-label>
-      <input matInput [(ngModel)]="nombre_mostrar" name="nombre_mostrar" required>
-    </mat-form-field>
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Nombre a mostrar</mat-label>
+        <input matInput [(ngModel)]="nombre_mostrar" name="nombre_mostrar" required />
+      </mat-form-field>
 
-    <button mat-raised-button color="primary">Crear</button>
-  </form>
+      <div class="center-right" style="width:100%; margin-top:4px;">
+        <button mat-raised-button color="primary" [disabled]="f.invalid">Crear usuario</button>
+      </div>
+    </form>
 
-  <mat-error *ngIf="error">{{error}}</mat-error>
+    <mat-error *ngIf="error" style="margin-top:8px;">{{ error }}</mat-error>
+  </mat-card>
 
-  <mat-list>
-    <mat-list-item *ngFor="let u of usuarios()">
-      {{u.id_usuario}} · {{u.correo}} — {{u.nombre_mostrar}}
-    </mat-list-item>
-  </mat-list>
+  <!-- Grid de usuarios -->
+  <div class="grid">
+    <mat-card *ngFor="let u of usuarios(); trackBy: trackById" class="card">
+      <div class="card__row">
+        <div class="card__left">
+          <div class="title">
+            <mat-icon inline>person</mat-icon>
+            {{ u.nombre_mostrar }}
+          </div>
+          <div class="meta">{{ u.correo }}</div>
+          <div class="small">
+            ID: {{ u.id_usuario }}
+            <ng-container *ngIf="u.creado_en"> · Creado: {{ u.creado_en | date:'short' }}</ng-container>
+          </div>
+        </div>
+
+        <div class="card__right">
+          <span class="chip" [ngClass]="u.activo ? 'chip--ok' : 'chip--bad'">
+            {{ u.activo ? 'Activo' : 'Inactivo' }}
+          </span>
+        </div>
+      </div>
+    </mat-card>
+  </div>
+
+  <p *ngIf="!error && usuarios().length===0" class="small mt-12">No hay usuarios.</p>
 </div>

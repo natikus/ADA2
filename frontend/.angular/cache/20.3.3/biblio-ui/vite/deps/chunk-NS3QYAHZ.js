@@ -11,11 +11,6 @@ import {
   ɵɵdefineNgModule
 } from "./chunk-E77H5O53.js";
 
-// node_modules/@angular/cdk/fesm2022/coercion.mjs
-function coerceBooleanProperty(value) {
-  return value != null && `${value}` !== "false";
-}
-
 // node_modules/@angular/cdk/fesm2022/layout.mjs
 var LayoutModule = class _LayoutModule {
   static ɵfac = function LayoutModule_Factory(__ngFactoryType__) {
@@ -47,8 +42,13 @@ function _animationsDisabled() {
   return _getAnimationsState() !== "enabled";
 }
 
+// node_modules/@angular/cdk/fesm2022/coercion.mjs
+function coerceBooleanProperty(value) {
+  return value != null && `${value}` !== "false";
+}
+
 export {
-  coerceBooleanProperty,
-  _animationsDisabled
+  _animationsDisabled,
+  coerceBooleanProperty
 };
-//# sourceMappingURL=chunk-IOREFFYU.js.map
+//# sourceMappingURL=chunk-NS3QYAHZ.js.map

@@ -14,7 +14,22 @@ export interface Copia { id_copia:number; id_libro:number; titulo:string; autor:
 export interface CopiaCreate { id_libro:number; id_duenio:number; estado?:string; notas?:string|null; visibilidad?:string; }
 
 
-export interface Solicitud { id_solicitud:number; estado:string; solicitada_en:string; }
+export interface Solicitud {
+  id_solicitud: string;         
+  estado: 'PENDIENTE'|'ACEPTADA'|'RECHAZADA'|'CANCELADA';
+  solicitada_en: string;
+  decidida_en?: string | null;
+  id_copia: string;             
+  id_libro: string;              
+  titulo: string;
+  autor: string;
+  id_solicitante: string;       
+  solicitante: string;
+  id_duenio: string;            
+  duenio: string;
+}
+
+
 export interface Prestamo { id_prestamo:number; id_copia:number; id_duenio:number; id_prestatario:number; estado:string; fecha_inicio:string; fecha_vencimiento:string; fecha_devolucion:string|null; titulo:string; autor:string; }
 
 
@@ -49,6 +64,10 @@ return this.http.get<Copia[]>(`${this.base}/copias`, { params });
 
 
 // Solicitudes
+
+listarSolicitudes() {
+  return this.http.get<Solicitud[]>(`${this.base}/solicitudes`);
+}
 crearSolicitud(id_copia:number, id_solicitante:number, mensaje?:string){
 return this.http.post<Solicitud>(`${this.base}/solicitudes`, { id_copia, id_solicitante, mensaje });
 }

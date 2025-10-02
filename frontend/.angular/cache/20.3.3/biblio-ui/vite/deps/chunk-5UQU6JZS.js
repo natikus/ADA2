@@ -1,6 +1,6 @@
 import {
   _animationsDisabled
-} from "./chunk-IOREFFYU.js";
+} from "./chunk-NS3QYAHZ.js";
 import {
   MatCommonModule,
   _getEventTarget,
@@ -671,4 +671,4 @@ export {
   _StructuralStylesLoader,
   MatRippleModule
 };
-//# sourceMappingURL=chunk-NDJ54KKO.js.map
+//# sourceMappingURL=chunk-5UQU6JZS.js.map

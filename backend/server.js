@@ -11,11 +11,12 @@ app.use(express.json());
 
 const pool = new Pool({
   host: process.env.PGHOST,
-  port: process.env.PGPORT,
+  port: Number(process.env.PGPORT),
   database: process.env.PGDATABASE,
   user: process.env.PGUSER,
-  password: process.env.PGPASSWORD
+  password: String(process.env.PGPASSWORD),
 });
+
 
 // Utilidad simple para manejar transacciones
 async function withTx(fn) {
@@ -179,6 +180,34 @@ app.get("/copias", async (req, res) => {
 // ---------------------------
 // Solicitudes de préstamo
 // ---------------------------
+
+// Listar solicitudes
+// Listar solicitudes (enriquecidas)
+app.get("/solicitudes", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+SELECT
+  s.id_solicitud, s.estado, s.solicitada_en, s.decidida_en,
+  s.id_copia, c.id_libro,
+  l.titulo AS titulo,   
+  l.autor  AS autor,   
+  s.id_solicitante, us.nombre_mostrar AS solicitante,
+  s.id_duenio,      ud.nombre_mostrar AS duenio
+FROM solicitud s
+JOIN copia c  ON c.id_copia = s.id_copia
+JOIN libro l  ON l.id_libro = c.id_libro
+JOIN usuario us ON us.id_usuario = s.id_solicitante
+JOIN usuario ud ON ud.id_usuario = s.id_duenio
+ORDER BY s.id_solicitud DESC
+LIMIT 100
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Error al listar solicitudes" });
+  }
+});
+
 
 // Crear solicitud
 app.post("/solicitudes", async (req, res) => {

@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, Usuario } from '../../core/api.service';
 
 // Angular Material
+import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
-import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
+import { MatListModule } from '@angular/material/list';
 
 @Component({
   selector: 'app-usuarios',
@@ -16,12 +17,12 @@ import { MatIconModule } from '@angular/material/icon';
   imports: [
     CommonModule,
     FormsModule,
-    // 👇 Material
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
     MatListModule,
-    MatIconModule
+    MatIconModule,
+    MatCardModule
   ],
   templateUrl: './usuarios.component.html'
 })
@@ -35,7 +36,10 @@ export class UsuariosComponent {
   error = '';
 
   constructor() { this.listar(); }
-
+  trackById(index: number, u: Usuario): number {
+    return u.id_usuario;
+  }
+  
   listar() {
     this.api.listarUsuarios().subscribe({
       next: r => this.usuarios.set(r),

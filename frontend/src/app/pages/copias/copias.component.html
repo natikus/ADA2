@@ -1,8 +1,32 @@
 <h2>Copias</h2>
-<div *ngIf="error" style="color:red">{{error}}</div>
+<div *ngIf="error" style="color:red">{{ error }}</div>
 
-<mat-list>
-  <mat-list-item *ngFor="let c of copias()">
-    {{c.id_copia}} · {{c.titulo}} — Estado: {{c.estado}} · Disponible: {{c.disponible ? 'Sí' : 'No'}}
-  </mat-list-item>
-</mat-list>
+<div class="grid">
+  <mat-card *ngFor="let c of copias(); trackBy: trackById" class="card">
+    <div class="card-row">
+      <!-- Columna izquierda -->
+      <div class="info">
+        <div class="title">
+          {{ c.titulo || ('Libro #' + c.id_libro) }} — {{ c.autor || 'Autor desconocido' }}
+        </div>
+        <div class="sub">Dueño: <strong>{{ c.id_duenio }}</strong> · Copia #{{ c.id_copia }}</div>
+        <div class="sub">Estado: {{ c.estado }} · Visibilidad: {{ c.visibilidad }}</div>
+      </div>
+
+      <!-- Columna derecha -->
+      <div class="actions">
+        <span class="chip" [class.ok]="c.disponible" [class.no]="!c.disponible">
+          {{ c.disponible ? 'Disponible' : 'No disponible' }}
+        </span>
+
+        <button mat-stroked-button color="primary"
+                [disabled]="!c.disponible || c.id_duenio === currentUserId"
+                (click)="solicitar(c.id_copia)">
+          Solicitar
+        </button>
+      </div>
+    </div>
+  </mat-card>
+</div>
+
+<p *ngIf="!error && copias().length === 0" class="empty">No hay copias.</p>

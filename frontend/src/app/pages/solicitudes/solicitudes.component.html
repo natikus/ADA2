@@ -1,10 +1,43 @@
 <h2>Solicitudes</h2>
-<mat-error *ngIf="error">{{error}}</mat-error>
+<div *ngIf="error" style="color:red">{{ error }}</div>
 
 <mat-list>
-  <mat-list-item *ngFor="let s of solicitudes()">
-    {{s.id_solicitud}} · Estado: {{s.estado}}
-    <button mat-button color="primary" (click)="aceptar(s.id_solicitud)">Aceptar</button>
-    <button mat-button color="warn" (click)="rechazar(s.id_solicitud)">Rechazar</button>
+  <mat-list-item *ngFor="let s of solicitudes(); trackBy: trackById">
+    <!-- LÍNEAS CORRECTAS PARA MAT LIST -->
+    <span matLine class="font-semibold">
+      #{{ s.id_solicitud }} · {{ s.titulo || ('Libro #' + s.id_libro) }} — {{ s.autor || 'Autor desconocido' }}
+    </span>
+
+    <span matLine class="text-sm opacity-80">
+      Solicitante: <strong>{{ s.solicitante }}</strong> · Dueño: <strong>{{ s.duenio }}</strong>
+    </span>
+
+    <span matLine class="text-xs opacity-70">
+      Solicitada: {{ s.solicitada_en | date:'short' }}
+      <ng-container *ngIf="s.decidida_en">
+        · Decidida: {{ s.decidida_en | date:'short' }}
+      </ng-container>
+    </span>
+
+    <!-- Acciones + estado al extremo derecho -->
+    <span class="ml-auto flex items-center gap-2">
+      <span
+        [ngStyle]="{
+          'background': s.estado==='PENDIENTE' ? '#ffecb3' :
+                        s.estado==='ACEPTADA' ? '#c8e6c9' :
+                        s.estado==='RECHAZADA' ? '#ffcdd2' : '#e0e0e0',
+          'padding':'4px 8px','border-radius':'12px','font-size':'12px'
+        }">
+        {{ s.estado }}
+      </span>
+
+      <ng-container *ngIf="s.estado === 'PENDIENTE'">
+        <button mat-button color="primary" (click)="aceptar(+s.id_solicitud)">Aceptar</button>
+        <button mat-button color="warn" (click)="rechazar(+s.id_solicitud)">Rechazar</button>
+      </ng-container>
+    </span>
   </mat-list-item>
 </mat-list>
+
+<!-- Debug temporal: descomenta si querés verificar que llegan titulo/autor -->
+<!-- <pre>{{ solicitudes() | json }}</pre> -->

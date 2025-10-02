@@ -17,10 +17,11 @@ export class SolicitudesComponent {
   error = '';
 
   constructor() { this.listar(); }
+  trackById = (_: number, s: Solicitud) => s.id_solicitud;
 
   listar() {
-    this.api.listarPrestamos().subscribe({ // revisar según tu backend si hay endpoint solicitudes
-      next: r => this.solicitudes.set(r as any),
+    this.api.listarSolicitudes().subscribe({
+      next: r => this.solicitudes.set(r),
       error: () => this.error = 'Error al listar'
     });
   }
@@ -33,4 +34,5 @@ export class SolicitudesComponent {
   rechazar(id: number) {
     this.api.rechazarSolicitud(id).subscribe({ next: () => this.listar() });
   }
+
 }
