@@ -120,3 +120,45 @@ CREATE TABLE evento_prestamo (
   tipo_evento  TEXT NOT NULL,               -- 'CREADO','DEVUELTO','ATRASADO', etc.
   datos        JSONB
 );
+
+INSERT INTO usuario (correo, clave_hash, nombre_mostrar, activo)
+VALUES
+  ('ana@example.com', 'hash1', 'Ana', TRUE),
+  ('luis@example.com', 'hash2', 'Luis', TRUE),
+  ('maria@example.com', 'hash3', 'María', TRUE),
+  ('pedro@example.com', 'hash4', 'Pedro', TRUE);
+
+INSERT INTO usuario_rol (id_usuario, id_rol)
+VALUES
+  (1, 2),  -- Ana -> USUARIO
+  (2, 2),  -- Luis -> USUARIO
+  (3, 2),  -- María -> USUARIO
+  (4, 1);  -- Pedro -> ADMIN
+INSERT INTO libro (isbn_10, titulo, autor, anio_publicacion)
+VALUES
+  ('1234567890', 'El Principito', 'Antoine de Saint-Exupéry', 1943),
+  ('9876543210', 'Cien años de soledad', 'Gabriel García Márquez', 1967),
+  ('2468135790', 'La sombra del viento', 'Carlos Ruiz Zafón', 2001);
+INSERT INTO copia (id_libro, id_duenio, estado, visibilidad, disponible)
+VALUES
+  (1, 1, 'BUENO', 'PUBLICA', TRUE),   -- Ana tiene "El Principito"
+  (2, 2, 'NUEVO', 'PUBLICA', TRUE),   -- Luis tiene "Cien años de soledad"
+  (3, 3, 'CASI_NUEVO', 'PUBLICA', TRUE); -- María tiene "La sombra del viento"
+-- Luis pide prestado el Principito a Ana
+INSERT INTO solicitud (id_copia, id_solicitante, id_duenio, mensaje)
+VALUES (1, 2, 1, '¿Me prestás El Principito?');
+
+-- María pide prestado Cien años de soledad a Luis
+INSERT INTO solicitud (id_copia, id_solicitante, id_duenio, mensaje)
+VALUES (2, 3, 2, 'Lo necesito para un trabajo de literatura.');
+
+-- Pedro pide prestado La sombra del viento a María
+INSERT INTO solicitud (id_copia, id_solicitante, id_duenio, mensaje)
+VALUES (3, 4, 3, 'Quiero leer este clásico.');
+INSERT INTO prestamo (id_copia, id_duenio, id_prestatario, id_solicitud, estado, fecha_inicio, fecha_vencimiento)
+VALUES
+  (1, 1, 2, 1, 'ACTIVO', '2025-10-02', '2025-10-16');
+UPDATE solicitud SET estado='ACEPTADA', decidida_en=now() WHERE id_solicitud=1;
+INSERT INTO evento_prestamo (id_prestamo, tipo_evento, datos)
+VALUES
+  (1, 'CREADO', '{"origen":"insert manual"}');
