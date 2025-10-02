@@ -1,18 +1,41 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_DB=biblioapp
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    networks:
+      - app-network
+
   app:
     build: .
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
-      - PGHOST=host.docker.internal
-      - PGPORT=5433
-      - PGDATABASE=biblioteca
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGDATABASE=biblioapp
       - PGUSER=postgres
-      - PGPASSWORD=2311
+      - PGPASSWORD=postgres
+    depends_on:
+      - postgres
     restart: unless-stopped
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
