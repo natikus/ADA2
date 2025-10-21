@@ -17,6 +17,69 @@ const pool = new Pool({
   password: String(process.env.PGPASSWORD),
 });
 
+// ---------- Disponibilidad: utilidades ----------
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function isTransientPgError(err) {
+  // Códigos/errores típicos transitorios (red, timeouts, locks, failover)
+  const pgCodes = new Set([
+    '40001', // serialization_failure
+    '40P01', // deadlock_detected
+    '55P03', // lock_not_available
+    '53300', // too_many_connections
+    '57P01', // admin_shutdown
+    '08000', '08001', '08003', '08006', '08004', '08007', // connection issues
+  ]);
+  if (err && (pgCodes.has(err.code))) return true;
+
+  const m = String(err.message || '').toLowerCase();
+  return (
+    m.includes('timeout') ||
+    m.includes('pool is closed') ||
+    m.includes('terminating connection') ||
+    m.includes('connection terminated') ||
+    m.includes('lost connection') ||
+    m.includes('connection refused') ||
+    m.includes('read econreset') ||
+    m.includes('write epipe') ||
+    m.includes('socket hang up')
+  );
+}
+
+/**
+ * query con reintentos (backoff exponencial + jitter)
+ * Uso: igual que pool.query(text, params)
+ */
+const rawQuery = pool.query.bind(pool);
+async function queryWithRetry(text, params = [], {
+  maxRetries = 3,
+  baseDelayMs = 100
+} = {}) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await rawQuery(text, params);
+    } catch (err) {
+      const canRetry = isTransientPgError(err) && attempt < maxRetries;
+      if (!canRetry) throw err;
+      const delay = Math.round(baseDelayMs * (2 ** attempt) * (0.5 + Math.random())); // jitter
+      attempt++;
+      console.warn(`[DB RETRY] intento ${attempt} en ${delay}ms - motivo:`, err.code || err.message);
+      await sleep(delay);
+    }
+  }
+}
+// Sobrescribimos pool.query para que TODO lo no-transaccional ya tenga reintentos
+pool.query = (text, params) => queryWithRetry(text, params);
+
+// Helper para readiness check con timeout "duro"
+async function select1WithTimeout(timeoutMs = 1500) {
+  const p = pool.query('SELECT 1 as ok');
+  const t = new Promise((_, rej) => setTimeout(() => rej(new Error('health-timeout')), timeoutMs));
+  return Promise.race([p, t]);
+}
+
+
 
 // Utilidad simple para manejar transacciones
 async function withTx(fn) {
@@ -400,6 +463,39 @@ app.post("/prestamos/:id/devolver", async (req, res) => {
     res.status(status).json({ error: e.msg || "Error al devolver" });
   }
 });
+// ---------- Health Endpoints ----------
+
+// Liveness: ¿el proceso está vivo?
+app.get('/healthz', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime_s: process.uptime(),
+    now: new Date().toISOString()
+  });
+});
+
+// Readiness: ¿la app puede servir tráfico (DB OK)?
+app.get('/readyz', async (req, res) => {
+  const started = Date.now();
+  try {
+    await select1WithTimeout(1500);
+    return res.json({
+      status: 'ready',
+      db: 'ok',
+      latency_ms: Date.now() - started,
+      now: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('[READYZ] fallo:', err.message);
+    return res.status(503).json({
+      status: 'not-ready',
+      db: 'down',
+      error: err.message,
+      latency_ms: Date.now() - started
+    });
+  }
+});
+
 
 // ---------------------------
 
