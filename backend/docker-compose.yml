@@ -1,10 +1,24 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   postgres:
     image: postgres:15-alpine
     ports:
-      - "5434:5432"
+      - "5435:5432"
     environment:
       - POSTGRES_DB=biblioapp
       - POSTGRES_USER=postgres
@@ -25,16 +39,20 @@ services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      - "0.0.0.0:3001:3000"
     environment:
       - PORT=3000
+      - HOST=0.0.0.0
       - PGHOST=postgres
       - PGPORT=5432
       - PGDATABASE=biblioapp
       - PGUSER=postgres
       - PGPASSWORD=postgres
+      - REDIS_URL=redis://redis:6379
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     networks:

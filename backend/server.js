@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import pkg from "pg";
+import Redis from "ioredis";
 
 dotenv.config();
 const { Pool } = pkg;
@@ -16,6 +17,125 @@ const pool = new Pool({
   user: process.env.PGUSER,
   password: String(process.env.PGPASSWORD),
 });
+
+// ---------- Cache-Aside: Redis ----------
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
+const cacheLogs = [];
+const MAX_CACHE_LOGS = 50;
+
+function addCacheLog(type, message, details = {}) {
+  const log = {
+    timestamp: new Date().toISOString(),
+    type: type,
+    message: message,
+    ...details
+  };
+
+  cacheLogs.unshift(log);
+  if (cacheLogs.length > MAX_CACHE_LOGS) {
+    cacheLogs.pop();
+  }
+
+  return log;
+}
+
+// funcion helper para cache-aside
+async function getCachedOrQuery(cacheKey, queryFn, ttlSeconds = 300) {
+  const startTime = Date.now();
+  try {
+    // aca se intenta obtener desde cache
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      const responseTime = Date.now() - startTime;
+      addCacheLog('HIT', `Datos obtenidos desde caché`, {
+        cacheKey,
+        responseTime,
+        dataSize: cached.length
+      });
+      console.log(`[CACHE HIT] ${cacheKey} (${responseTime}ms)`);
+      return {
+        data: JSON.parse(cached),
+        cacheStatus: 'HIT',
+        responseTime: responseTime,
+        cacheKey: cacheKey
+      };
+    }
+
+    // Cache miss - ejecutar query
+    const queryStartTime = Date.now();
+    addCacheLog('MISS', `Consultando base de datos`, { cacheKey });
+    console.log(`[CACHE MISS] ${cacheKey} - consultando BD...`);
+    const result = await queryFn();
+    const queryTime = Date.now() - queryStartTime;
+
+    // guardamos en cache
+    await redis.setex(cacheKey, ttlSeconds, JSON.stringify(result));
+
+    const totalTime = Date.now() - startTime;
+    addCacheLog('STORE', `Datos guardados en caché`, {
+      cacheKey,
+      ttlSeconds,
+      dataSize: JSON.stringify(result).length,
+      queryTime,
+      totalTime
+    });
+    console.log(`[CACHE MISS] ${cacheKey} guardado en Redis (query: ${queryTime}ms, total: ${totalTime}ms)`);
+
+    return {
+      data: result,
+      cacheStatus: 'MISS',
+      responseTime: totalTime,
+      queryTime: queryTime,
+      cacheKey: cacheKey
+    };
+  } catch (err) {
+    const errorTime = Date.now() - startTime;
+    addCacheLog('ERROR', `Error en caché: ${err.message}`, {
+      cacheKey,
+      error: err.message,
+      responseTime: errorTime
+    });
+    console.warn(`[CACHE ERROR] ${cacheKey} (${errorTime}ms):`, err.message);
+    // Fallback: ejecutar query sin caché
+    // fallback, se ejecuta el query (sin cache) si no anduvo
+    const result = await queryFn();
+    return {
+      data: result,
+      cacheStatus: 'ERROR',
+      responseTime: Date.now() - startTime,
+      error: err.message,
+      cacheKey: cacheKey
+    };
+  }
+}
+
+// función para invalidar caché
+async function invalidateCache(pattern) {
+  try {
+    if (pattern === 'libros:all') {
+      await redis.del('libros:all');
+      addCacheLog('INVALIDATE', `Caché invalidado después de modificación`, {
+        pattern: 'libros:all',
+        reason: 'nuevo libro creado'
+      });
+      console.log('[CACHE INVALIDATE] libros:all');
+    } else if (pattern.startsWith('libros:search:')) {
+      await redis.del(pattern);
+      addCacheLog('INVALIDATE', `Caché de búsqueda invalidado`, {
+        pattern,
+        reason: 'búsqueda específica'
+      });
+      console.log(`[CACHE INVALIDATE] ${pattern}`);
+    }
+  } catch (err) {
+    addCacheLog('INVALIDATE_ERROR', `Error al invalidar caché: ${err.message}`, {
+      pattern,
+      error: err.message
+    });
+    console.warn('[CACHE INVALIDATE ERROR]', err.message);
+  }
+}
 
 // ---------- Disponibilidad: utilidades ----------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -150,7 +270,7 @@ app.post("/login", async (req, res) => {
 // Libros
 // ---------------------------
 
-// Crear libro
+// Crear libro - CON INVALIDACIÓN DE CACHÉ
 app.post("/libros", async (req, res) => {
   try {
     const { isbn_10, isbn_13, titulo, autor, anio_publicacion } = req.body;
@@ -159,6 +279,15 @@ app.post("/libros", async (req, res) => {
                VALUES ($1,$2,$3,$4,$5)
                RETURNING id_libro, titulo, autor, anio_publicacion`;
     const { rows } = await pool.query(q, [isbn_10 || null, isbn_13 || null, titulo, autor, anio_publicacion || null]);
+
+    // invalidar caché después de crear libro
+    try {
+      await redis.del('libros:all');
+      console.log('[CACHE INVALIDATE] libros:all');
+    } catch (cacheErr) {
+      console.warn('[CACHE INVALIDATE ERROR]', cacheErr.message);
+    }
+
     res.status(201).json(rows[0]);
   } catch (e) {
     console.error(e);
@@ -166,25 +295,68 @@ app.post("/libros", async (req, res) => {
   }
 });
 
-// Listar libros (búsqueda simple)
+// Listar libros (búsqueda simple) - CON CACHE-ASIDE
 app.get("/libros", async (req, res) => {
   try {
     const { q } = req.query;
+
     if (q) {
-      const { rows } = await pool.query(
-        `SELECT id_libro, titulo, autor, anio_publicacion
-         FROM libro
-         WHERE titulo ILIKE '%'||$1||'%' OR autor ILIKE '%'||$1||'%'
-         ORDER BY titulo ASC
-         LIMIT 50`, [q]
+      // busqueda con parámetro - usar cache con TTL mas corto
+      const cacheKey = `libros:search:${q}`;
+      const cacheResult = await getCachedOrQuery(cacheKey,
+        async () => {
+          const { rows } = await pool.query(
+            `SELECT id_libro, titulo, autor, anio_publicacion
+             FROM libro
+             WHERE titulo ILIKE '%'||$1||'%' OR autor ILIKE '%'||$1||'%'
+             ORDER BY titulo ASC
+             LIMIT 50`, [q]
+          );
+          return rows;
+        },
+        180
       );
-      return res.json(rows);
+
+      res.set({
+        'X-Cache-Status': cacheResult.cacheStatus,
+        'X-Cache-Key': cacheResult.cacheKey,
+        'X-Response-Time': `${cacheResult.responseTime}ms`,
+        'X-Cache-TTL': q ? '180s' : '300s'
+      });
+
+      if (cacheResult.cacheStatus === 'MISS') {
+        res.set('X-Query-Time', `${cacheResult.queryTime}ms`);
+      }
+
+      return res.json(cacheResult.data);
     }
-    const { rows } = await pool.query(
-      `SELECT id_libro, titulo, autor, anio_publicacion
-       FROM libro ORDER BY creado_en DESC LIMIT 50`
+
+    // listado general - usar cache con TTL mas largo
+    const cacheKey = 'libros:all';
+    const cacheResult = await getCachedOrQuery(cacheKey,
+      async () => {
+        const { rows } = await pool.query(
+          `SELECT id_libro, titulo, autor, anio_publicacion
+           FROM libro ORDER BY creado_en DESC LIMIT 50`
+        );
+        return rows;
+      },
+      300
     );
-    res.json(rows);
+
+    res.set({
+      'X-Cache-Status': cacheResult.cacheStatus,
+      'X-Cache-Key': cacheResult.cacheKey,
+      'X-Response-Time': `${cacheResult.responseTime}ms`,
+      'X-Cache-TTL': '300s'
+    });
+
+    if (cacheResult.cacheStatus === 'MISS') {
+      res.set('X-Query-Time', `${cacheResult.queryTime}ms`);
+    }
+
+    res.json(cacheResult.data);
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Error al listar libros" });
@@ -496,10 +668,82 @@ app.get('/readyz', async (req, res) => {
   }
 });
 
+// endpoint para monitorear el estado del cache
+app.get('/cachez', async (req, res) => {
+  try {
+    const cacheStats = {
+      redis_connected: false,
+      cache_keys: [],
+      cache_info: null
+    };
+
+    // verificar conexion a redis
+    await redis.ping();
+    cacheStats.redis_connected = true;
+
+    // obtener todas las claves relacionadas con libros
+    const keys = await redis.keys('libros:*');
+    cacheStats.cache_keys = keys;
+
+    // obtener informacion de cada clave
+    const cacheInfo = {};
+    for (const key of keys) {
+      const ttl = await redis.ttl(key);
+      const value = await redis.get(key);
+      cacheInfo[key] = {
+        ttl: ttl,
+        size: value ? value.length : 0,
+        has_data: !!value
+      };
+    }
+    cacheStats.cache_info = cacheInfo;
+
+    res.json(cacheStats);
+  } catch (err) {
+    console.error('[CACHEZ] fallo:', err.message);
+    res.status(503).json({
+      redis_connected: false,
+      error: err.message
+    });
+  }
+});
+
+// endpoint para ver logs recientes del caché
+app.get('/cachelogs', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20; // por defecto últimos 20 logs
+    const type = req.query.type; // filtrar por tipo (HIT, MISS, STORE, etc.
+
+    let logs = [...cacheLogs];
+
+    // filtrar por tipo si se especifica
+    if (type) {
+      logs = logs.filter(log => log.type === type);
+    }
+
+    // limitar cantidad
+    logs = logs.slice(0, Math.min(limit, MAX_CACHE_LOGS));
+
+    res.json({
+      total_logs: cacheLogs.length,
+      logs_returned: logs.length,
+      filter: type ? { type } : null,
+      logs: logs
+    });
+  } catch (err) {
+    console.error('[CACHELOGS] error:', err.message);
+    res.status(500).json({
+      error: 'Error al obtener logs del caché',
+      details: err.message
+    });
+  }
+});
+
 
 // ---------------------------
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`API escuchando en http://localhost:${port}`);
+const host = process.env.HOST || '0.0.0.0';
+app.listen(port, host, () => {
+  console.log(`API escuchando en http://${host}:${port}`);
 });
