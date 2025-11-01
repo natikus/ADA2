@@ -3,6 +3,19 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import pkg from "pg";
 import Redis from "ioredis";
+import CommandBus from "./cqrs/bus/command-bus.js";
+import QueryBus from "./cqrs/bus/query-bus.js";
+import EventPublisher from "./cqrs/events/event-publisher.js";
+import { CrearLibroHandler } from "./cqrs/handlers/commands/libros.js";
+import { ListarLibrosHandler } from "./cqrs/handlers/queries/libros.js";
+import { CrearUsuarioHandler } from "./cqrs/handlers/commands/usuarios.js";
+import { ListarUsuariosHandler } from "./cqrs/handlers/queries/usuarios.js";
+import { CrearCopiaHandler } from "./cqrs/handlers/commands/copias.js";
+import { ListarCopiasHandler } from "./cqrs/handlers/queries/copias.js";
+import { CrearSolicitudHandler, AceptarSolicitudHandler, RechazarSolicitudHandler } from "./cqrs/handlers/commands/solicitudes.js";
+import { ListarSolicitudesHandler } from "./cqrs/handlers/queries/solicitudes.js";
+import { DevolverPrestamoHandler } from "./cqrs/handlers/commands/prestamos.js";
+import { ListarPrestamosHandler } from "./cqrs/handlers/queries/prestamos.js";
 
 dotenv.config();
 const { Pool } = pkg;
@@ -20,6 +33,33 @@ const pool = new Pool({
 
 // ---------- Cache-Aside: Redis ----------
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
+// ---------- CQRS infra ----------
+const commandBus = new CommandBus();
+const queryBus = new QueryBus();
+const eventPublisher = new EventPublisher();
+
+// registro de handlers (libros)
+commandBus.register('CREAR_LIBRO', new CrearLibroHandler(pool, redis, eventPublisher));
+queryBus.register('OBTENER_LIBROS', new ListarLibrosHandler(pool));
+
+// registro de handlers (usuarios)
+commandBus.register('CREAR_USUARIO', new CrearUsuarioHandler(pool));
+queryBus.register('OBTENER_USUARIOS', new ListarUsuariosHandler(pool));
+
+// registro de handlers (copias)
+commandBus.register('CREAR_COPIA', new CrearCopiaHandler(pool));
+queryBus.register('OBTENER_COPIAS', new ListarCopiasHandler(pool));
+
+// registro de handlers (solicitudes)
+commandBus.register('CREAR_SOLICITUD', new CrearSolicitudHandler(pool));
+commandBus.register('ACEPTAR_SOLICITUD', new AceptarSolicitudHandler(pool));
+commandBus.register('RECHAZAR_SOLICITUD', new RechazarSolicitudHandler(pool));
+queryBus.register('OBTENER_SOLICITUDES', new ListarSolicitudesHandler(pool));
+
+// registro de handlers (prestamos)
+commandBus.register('DEVOLVER_PRESTAMO', new DevolverPrestamoHandler(pool));
+queryBus.register('OBTENER_PRESTAMOS', new ListarPrestamosHandler(pool));
 
 const cacheLogs = [];
 const MAX_CACHE_LOGS = 50;
@@ -221,29 +261,18 @@ async function withTx(fn) {
 // Usuarios
 // ---------------------------
 
-// Crear usuario
+// Crear usuario (CQRS)
 app.post("/usuarios", async (req, res) => {
   try {
     const { correo, clave, nombre_mostrar } = req.body;
-    if (!correo || !clave || !nombre_mostrar) {
-      return res.status(400).json({ error: "correo, clave y nombre_mostrar son obligatorios" });
-    }
-    const hash = await bcrypt.hash(clave, 10);
-    // Enforce unicidad case-insensitive
-    const exists = await pool.query(
-      "SELECT 1 FROM usuario WHERE LOWER(correo)=LOWER($1)",
-      [correo]
-    );
-    if (exists.rowCount > 0) return res.status(409).json({ error: "Correo ya registrado" });
-
-    const q = `INSERT INTO usuario (correo, clave_hash, nombre_mostrar, activo)
-               VALUES ($1,$2,$3, TRUE)
-               RETURNING id_usuario, correo, nombre_mostrar, activo, creado_en`;
-    const { rows } = await pool.query(q, [correo, hash, nombre_mostrar]);
-    res.status(201).json(rows[0]);
+    const created = await commandBus.execute({
+      type: 'CREAR_USUARIO',
+      payload: { correo, clave, nombre_mostrar }
+    });
+    res.status(201).json(created);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Error al crear usuario" });
+    const status = e.status || 500;
+    res.status(status).json({ error: e.message || "Error al crear usuario" });
   }
 });
 
@@ -270,25 +299,23 @@ app.post("/login", async (req, res) => {
 // Libros
 // ---------------------------
 
-// Crear libro - CON INVALIDACIÓN DE CACHÉ
+// Crear libro (CQRS)
 app.post("/libros", async (req, res) => {
   try {
     const { isbn_10, isbn_13, titulo, autor, anio_publicacion } = req.body;
     if (!titulo || !autor) return res.status(400).json({ error: "titulo y autor son obligatorios" });
-    const q = `INSERT INTO libro (isbn_10, isbn_13, titulo, autor, anio_publicacion)
-               VALUES ($1,$2,$3,$4,$5)
-               RETURNING id_libro, titulo, autor, anio_publicacion`;
-    const { rows } = await pool.query(q, [isbn_10 || null, isbn_13 || null, titulo, autor, anio_publicacion || null]);
-
-    // invalidar caché después de crear libro
-    try {
-      await redis.del('libros:all');
-      console.log('[CACHE INVALIDATE] libros:all');
-    } catch (cacheErr) {
-      console.warn('[CACHE INVALIDATE ERROR]', cacheErr.message);
-    }
-
-    res.status(201).json(rows[0]);
+    const command = {
+      type: 'CREAR_LIBRO',
+      payload: {
+        titulo,
+        autor,
+        isbn10: isbn_10,
+        isbn13: isbn_13,
+        anioPublicacion: anio_publicacion
+      }
+    };
+    const created = await commandBus.execute(command);
+    res.status(201).json(created);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Error al crear libro" });
@@ -305,14 +332,8 @@ app.get("/libros", async (req, res) => {
       const cacheKey = `libros:search:${q}`;
       const cacheResult = await getCachedOrQuery(cacheKey,
         async () => {
-          const { rows } = await pool.query(
-            `SELECT id_libro, titulo, autor, anio_publicacion
-             FROM libro
-             WHERE titulo ILIKE '%'||$1||'%' OR autor ILIKE '%'||$1||'%'
-             ORDER BY titulo ASC
-             LIMIT 50`, [q]
-          );
-          return rows;
+          const result = await queryBus.execute({ type: 'OBTENER_LIBROS', filters: { q } });
+          return result;
         },
         180
       );
@@ -335,11 +356,8 @@ app.get("/libros", async (req, res) => {
     const cacheKey = 'libros:all';
     const cacheResult = await getCachedOrQuery(cacheKey,
       async () => {
-        const { rows } = await pool.query(
-          `SELECT id_libro, titulo, autor, anio_publicacion
-           FROM libro ORDER BY creado_en DESC LIMIT 50`
-        );
-        return rows;
+        const result = await queryBus.execute({ type: 'OBTENER_LIBROS', filters: {} });
+        return result;
       },
       300
     );
@@ -367,19 +385,15 @@ app.get("/libros", async (req, res) => {
 // Copias (ejemplares)
 // ---------------------------
 
-// Crear copia (ejemplar) de un libro
+// Crear copia (CQRS)
 app.post("/copias", async (req, res) => {
   try {
     const { id_libro, id_duenio, estado = "BUENO", notas = null, visibilidad = "PUBLICA" } = req.body;
-    if (!id_libro || !id_duenio) return res.status(400).json({ error: "id_libro e id_duenio son obligatorios" });
-    const q = `INSERT INTO copia (id_libro, id_duenio, estado, notas, visibilidad, disponible)
-               VALUES ($1,$2,$3,$4,$5, TRUE)
-               RETURNING id_copia, id_libro, id_duenio, estado, visibilidad, disponible`;
-    const { rows } = await pool.query(q, [id_libro, id_duenio, estado, notas, visibilidad]);
-    res.status(201).json(rows[0]);
+    const created = await commandBus.execute({ type: 'CREAR_COPIA', payload: { id_libro, id_duenio, estado, notas, visibilidad } });
+    res.status(201).json(created);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Error al crear copia" });
+    const status = e.status || 500;
+    res.status(status).json({ error: e.message || "Error al crear copia" });
   }
 });
 
@@ -387,27 +401,9 @@ app.post("/copias", async (req, res) => {
 app.get("/copias", async (req, res) => {
   try {
     const { disponible, id_libro } = req.query;
-    const conds = [];
-    const params = [];
-    if (typeof disponible !== "undefined") {
-      params.push(disponible === "1" || disponible === "true");
-      conds.push(`disponible = $${params.length}`);
-    }
-    if (id_libro) {
-      params.push(Number(id_libro));
-      conds.push(`id_libro = $${params.length}`);
-    }
-    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
-    const { rows } = await pool.query(
-      `SELECT c.id_copia, c.id_libro, l.titulo, l.autor, c.id_duenio, c.estado, c.visibilidad, c.disponible
-       FROM copia c JOIN libro l ON l.id_libro = c.id_libro
-       ${where}
-       ORDER BY c.creado_en DESC
-       LIMIT 100`, params
-    );
-    res.json(rows);
+    const result = await queryBus.execute({ type: 'OBTENER_COPIAS', filters: { disponible, id_libro } });
+    res.json(result);
   } catch (e) {
-    console.error(e);
     res.status(500).json({ error: "Error al listar copias" });
   }
 });
@@ -420,25 +416,9 @@ app.get("/copias", async (req, res) => {
 // Listar solicitudes (enriquecidas)
 app.get("/solicitudes", async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-SELECT
-  s.id_solicitud, s.estado, s.solicitada_en, s.decidida_en,
-  s.id_copia, c.id_libro,
-  l.titulo AS titulo,   
-  l.autor  AS autor,   
-  s.id_solicitante, us.nombre_mostrar AS solicitante,
-  s.id_duenio,      ud.nombre_mostrar AS duenio
-FROM solicitud s
-JOIN copia c  ON c.id_copia = s.id_copia
-JOIN libro l  ON l.id_libro = c.id_libro
-JOIN usuario us ON us.id_usuario = s.id_solicitante
-JOIN usuario ud ON ud.id_usuario = s.id_duenio
-ORDER BY s.id_solicitud DESC
-LIMIT 100
-    `);
-    res.json(rows);
+    const result = await queryBus.execute({ type: 'OBTENER_SOLICITUDES' });
+    res.json(result);
   } catch (e) {
-    console.error(e);
     res.status(500).json({ error: "Error al listar solicitudes" });
   }
 });
@@ -448,117 +428,47 @@ LIMIT 100
 app.post("/solicitudes", async (req, res) => {
   try {
     const { id_copia, id_solicitante, mensaje = null } = req.body;
-    if (!id_copia || !id_solicitante) {
-      return res.status(400).json({ error: "id_copia e id_solicitante son obligatorios" });
-    }
-    // Traer dueño de la copia y estado
-    const { rows: copiaRows } = await pool.query(
-      "SELECT id_duenio, disponible FROM copia WHERE id_copia=$1", [id_copia]
-    );
-    if (copiaRows.length === 0) return res.status(404).json({ error: "Copia no encontrada" });
-    const duenio = copiaRows[0].id_duenio;
-    if (duenio === Number(id_solicitante)) {
-      return res.status(400).json({ error: "No puedes solicitar tu propia copia" });
-    }
-    const q = `INSERT INTO solicitud (id_copia, id_solicitante, id_duenio, estado, mensaje)
-               VALUES ($1,$2,$3,'PENDIENTE',$4)
-               RETURNING id_solicitud, estado, solicitada_en`;
-    const { rows } = await pool.query(q, [id_copia, id_solicitante, duenio, mensaje]);
-    res.status(201).json(rows[0]);
+    const created = await commandBus.execute({ type: 'CREAR_SOLICITUD', payload: { id_copia, id_solicitante, mensaje } });
+    res.status(201).json(created);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Error al crear solicitud" });
+    const status = e.status || 500;
+    res.status(status).json({ error: e.message || "Error al crear solicitud" });
   }
 });
 
 // Aceptar solicitud -> crea préstamo
 app.post("/solicitudes/:id/aceptar", async (req, res) => {
-  const id_solicitud = Number(req.params.id);
-  const { fecha_inicio, fecha_vencimiento } = req.body;
-  if (!fecha_inicio || !fecha_vencimiento) {
-    return res.status(400).json({ error: "fecha_inicio y fecha_vencimiento son obligatorias" });
-  }
-
   try {
-    const result = await withTx(async (client) => {
-      // Bloquear solicitud
-      const { rows: sRows } = await client.query(
-        `SELECT id_solicitud, id_copia, id_solicitante, id_duenio, estado
-         FROM solicitud WHERE id_solicitud=$1 FOR UPDATE`, [id_solicitud]
-      );
-      if (sRows.length === 0) throw { status: 404, msg: "Solicitud no encontrada" };
-      const sol = sRows[0];
-      if (sol.estado !== "PENDIENTE") throw { status: 409, msg: "La solicitud no está pendiente" };
-
-      // Insertar préstamo (índice único evita 2 activos por copia)
-      const insertLoan = `INSERT INTO prestamo
-          (id_copia, id_duenio, id_prestatario, id_solicitud, estado, fecha_inicio, fecha_vencimiento)
-        VALUES ($1,$2,$3,$4,'ACTIVO',$5,$6)
-        RETURNING id_prestamo, id_copia, estado, fecha_inicio, fecha_vencimiento`;
-      const { rows: pRows } = await client.query(insertLoan, [
-        sol.id_copia, sol.id_duenio, sol.id_solicitante, sol.id_solicitud, fecha_inicio, fecha_vencimiento
-      ]);
-
-      // Marcar solicitud como aceptada
-      await client.query(
-        "UPDATE solicitud SET estado='ACEPTADA', decidida_en=now() WHERE id_solicitud=$1",
-        [id_solicitud]
-      );
-
-      // (Opcional) actualizar disponible a false (si no tenés trigger)
-      await client.query(
-        `UPDATE copia SET disponible = FALSE WHERE id_copia=$1`,
-        [sol.id_copia]
-      );
-
-      // Evento
-      await client.query(
-        `INSERT INTO evento_prestamo (id_prestamo, tipo_evento, datos)
-         VALUES ($1,'CREADO', '{"origen":"aceptar_solicitud"}')`,
-        [pRows[0].id_prestamo]
-      );
-
-      return pRows[0];
-    });
-
+    const id = Number(req.params.id);
+    const { fecha_inicio, fecha_vencimiento } = req.body;
+    const result = await commandBus.execute({ type: 'ACEPTAR_SOLICITUD', payload: { id, fecha_inicio, fecha_vencimiento } });
     res.json(result);
   } catch (e) {
-    console.error(e);
-    if (e.code === "23505") {
-      // violación de índice único: ya hay un préstamo ACTIVO/ATRASADO
-      return res.status(409).json({ error: "La copia ya tiene un préstamo activo" });
-    }
     const status = e.status || 500;
-    res.status(status).json({ error: e.msg || "Error al aceptar solicitud" });
+    res.status(status).json({ error: e.message || "Error al aceptar solicitud" });
   }
 });
 
 // Rechazar / Cancelar solicitud
 app.post("/solicitudes/:id/rechazar", async (req, res) => {
   try {
-    const { rowCount } = await pool.query(
-      `UPDATE solicitud SET estado='RECHAZADA', decidida_en=now()
-       WHERE id_solicitud=$1 AND estado='PENDIENTE'`, [req.params.id]
-    );
-    if (rowCount === 0) return res.status(409).json({ error: "No se pudo rechazar (¿ya decidida?)" });
-    res.json({ ok: true });
+    const id = Number(req.params.id);
+    const result = await commandBus.execute({ type: 'RECHAZAR_SOLICITUD', payload: { id } });
+    res.json(result);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Error al rechazar solicitud" });
+    const status = e.status || 500;
+    res.status(status).json({ error: e.message || "Error al rechazar solicitud" });
   }
 });
 // Listar usuarios
 app.get("/usuarios", async (req, res) => {
-    try {
-      const { rows } = await pool.query(
-        "SELECT id_usuario, correo, nombre_mostrar, activo, creado_en FROM usuario ORDER BY id_usuario ASC"
-      );
-      res.json(rows);
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: "Error al listar usuarios" });
-    }
-  });
+  try {
+    const result = await queryBus.execute({ type: 'OBTENER_USUARIOS' });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: "Error al listar usuarios" });
+  }
+});
   
 // ---------------------------
 // Préstamos
@@ -568,31 +478,9 @@ app.get("/usuarios", async (req, res) => {
 app.get("/prestamos", async (req, res) => {
   try {
     const { id_usuario, estado } = req.query;
-    const conds = [];
-    const params = [];
-    if (id_usuario) {
-      params.push(Number(id_usuario));
-      conds.push(`(p.id_prestatario = $${params.length} OR p.id_duenio = $${params.length})`);
-    }
-    if (estado) {
-      params.push(estado);
-      conds.push(`p.estado = $${params.length}`);
-    }
-    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
-    const q = `
-      SELECT p.id_prestamo, p.id_copia, p.id_duenio, p.id_prestatario,
-             p.estado, p.fecha_inicio, p.fecha_vencimiento, p.fecha_devolucion,
-             l.titulo, l.autor
-      FROM prestamo p
-      JOIN copia c ON c.id_copia = p.id_copia
-      JOIN libro l ON l.id_libro = c.id_libro
-      ${where}
-      ORDER BY p.id_prestamo DESC
-      LIMIT 100`;
-    const { rows } = await pool.query(q, params);
-    res.json(rows);
+    const result = await queryBus.execute({ type: 'OBTENER_PRESTAMOS', filters: { id_usuario, estado } });
+    res.json(result);
   } catch (e) {
-    console.error(e);
     res.status(500).json({ error: "Error al listar préstamos" });
   }
 });
@@ -601,38 +489,11 @@ app.get("/prestamos", async (req, res) => {
 app.post("/prestamos/:id/devolver", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const result = await withTx(async (client) => {
-      // Bloquear préstamo
-      const { rows } = await client.query(
-        `SELECT id_prestamo, id_copia, estado FROM prestamo WHERE id_prestamo=$1 FOR UPDATE`, [id]
-      );
-      if (rows.length === 0) throw { status: 404, msg: "Préstamo no encontrado" };
-      const p = rows[0];
-      if (p.estado === "DEVUELTO") throw { status: 409, msg: "Ya está devuelto" };
-
-      // Actualizar préstamo
-      await client.query(
-        `UPDATE prestamo SET estado='DEVUELTO', fecha_devolucion = CURRENT_DATE
-         WHERE id_prestamo=$1`, [id]
-      );
-
-      // Marcar copia disponible
-      await client.query(`UPDATE copia SET disponible = TRUE WHERE id_copia=$1`, [p.id_copia]);
-
-      // Evento
-      await client.query(
-        `INSERT INTO evento_prestamo (id_prestamo, tipo_evento, datos)
-         VALUES ($1,'DEVUELTO','{}')`, [id]
-      );
-
-      return { ok: true };
-    });
-
+    const result = await commandBus.execute({ type: 'DEVOLVER_PRESTAMO', payload: { id } });
     res.json(result);
   } catch (e) {
-    console.error(e);
     const status = e.status || 500;
-    res.status(status).json({ error: e.msg || "Error al devolver" });
+    res.status(status).json({ error: e.message || "Error al devolver" });
   }
 });
 // ---------- Health Endpoints ----------
@@ -741,6 +602,14 @@ app.get('/cachelogs', async (req, res) => {
 
 
 // ---------------------------
+
+// estado CQRS
+app.get('/cqrsz', (req, res) => {
+  res.json({
+    commands_executed: commandBus.executedCount,
+    queries_executed: queryBus.executedCount
+  });
+});
 
 const port = process.env.PORT || 3000;
 const host = process.env.HOST || '0.0.0.0';
