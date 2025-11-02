@@ -1,5 +1,18 @@
 <h2>Login</h2>
 
+<div style="margin: 12px 0;">
+  <div id="g_id_onload"
+       data-client_id="GOOGLE_CLIENT_ID_AQUI"
+       data-context="signin"
+       data-callback="handleGoogleCredential"
+       data-auto_prompt="false">
+  </div>
+  <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
+</div>
+
+<button (click)="whoAmI()">¿Quién soy?</button>
+<pre>{{whoami | json}}</pre>
+
 <mat-form-field appearance="outline">
   <mat-label>Correo</mat-label>
   <input matInput [(ngModel)]="correo">

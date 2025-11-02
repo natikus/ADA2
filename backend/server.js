@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import pkg from "pg";
 import Redis from "ioredis";
+import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
+import configStore from "./config/config.service.js";
 import CommandBus from "./cqrs/bus/command-bus.js";
 import QueryBus from "./cqrs/bus/query-bus.js";
 import EventPublisher from "./cqrs/events/event-publisher.js";
@@ -335,7 +338,7 @@ app.get("/libros", async (req, res) => {
           const result = await queryBus.execute({ type: 'OBTENER_LIBROS', filters: { q } });
           return result;
         },
-        180
+        Number(configStore.get('cache.ttlSearch', 180))
       );
 
       res.set({
@@ -359,7 +362,7 @@ app.get("/libros", async (req, res) => {
         const result = await queryBus.execute({ type: 'OBTENER_LIBROS', filters: {} });
         return result;
       },
-      300
+      Number(configStore.get('cache.ttlAll', 300))
     );
 
     res.set({
@@ -602,6 +605,84 @@ app.get('/cachelogs', async (req, res) => {
 
 
 // ---------------------------
+
+// External Configuration Store observability
+app.get('/configz', (req, res) => {
+  res.json({ updated_at: configStore.updatedAt(), config: configStore.all() });
+});
+
+// ---------- Federated Identity (Google OIDC) ----------
+const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+const jwtSecret = process.env.JWT_SECRET || 'dev-secret-change-me';
+const googleClient = new OAuth2Client(googleClientId);
+
+async function verifyGoogleIdToken(idToken) {
+  const ticket = await googleClient.verifyIdToken({ idToken, audience: googleClientId });
+  const payload = ticket.getPayload();
+  if (!payload) throw new Error('token inválido');
+  if (!payload.email || payload.email_verified === false) throw new Error('email no verificado');
+  return payload; // { email, name, sub, picture, ... }
+}
+
+function signApiJwt(user) {
+  const claims = {
+    sub: String(user.id_usuario),
+    email: user.correo,
+    name: user.nombre_mostrar
+  };
+  return jwt.sign(claims, jwtSecret, { expiresIn: '1h' });
+}
+
+// Crear/obtener usuario local por email (para OIDC)
+async function upsertUsuarioPorEmail(email, nombre) {
+  const sel = await pool.query('SELECT id_usuario, correo, nombre_mostrar FROM usuario WHERE LOWER(correo)=LOWER($1)', [email]);
+  if (sel.rowCount > 0) return sel.rows[0];
+  // crear usuario con hash placeholder
+  const placeholder = await bcrypt.hash('federated:' + Math.random().toString(36).slice(2), 6);
+  const ins = await pool.query(
+    `INSERT INTO usuario (correo, clave_hash, nombre_mostrar, activo)
+     VALUES ($1,$2,$3, TRUE)
+     RETURNING id_usuario, correo, nombre_mostrar`, [email, placeholder, nombre || email.split('@')[0]]
+  );
+  return ins.rows[0];
+}
+
+// Endpoint: el front envía id_token de Google
+app.post('/auth/google/callback', async (req, res) => {
+  try {
+    const { id_token } = req.body || {};
+    if (!id_token) return res.status(400).json({ error: 'id_token requerido' });
+
+    const payload = await verifyGoogleIdToken(id_token);
+    const user = await upsertUsuarioPorEmail(payload.email, payload.name);
+    const token = signApiJwt(user);
+
+    res.json({
+      token,
+      user
+    });
+  } catch (e) {
+    console.error('[OIDC] error:', e.message);
+    res.status(401).json({ error: 'autenticación federada fallida' });
+  }
+});
+
+function requireAuth(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const [, token] = auth.split(' ');
+  if (!token) return res.status(401).json({ error: 'token requerido' });
+  try {
+    req.user = jwt.verify(token, jwtSecret);
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'token inválido' });
+  }
+}
+
+// WhoAmI para demo
+app.get('/whoami', requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
 
 // estado CQRS
 app.get('/cqrsz', (req, res) => {

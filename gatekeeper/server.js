@@ -91,7 +91,9 @@ const allowlist = [
   { method: 'GET', path: /^\/(usuarios|libros|copias|solicitudes|prestamos)(\/.*)?$/ },
   { method: 'POST', path: /^\/(usuarios|libros|copias|solicitudes)(\/.*)?$/ },
   { method: 'POST', path: /^\/prestamos\/[0-9]+\/devolver$/ },
-  { method: 'POST', path: /^\/solicitudes\/[0-9]+\/(aceptar|rechazar)$/ }
+  { method: 'POST', path: /^\/solicitudes\/[0-9]+\/(aceptar|rechazar)$/ },
+  { method: 'POST', path: /^\/auth\/google\/callback$/ },
+  { method: 'GET', path: /^\/whoami$/ }
 ];
 
 app.use((req, res, next) => {

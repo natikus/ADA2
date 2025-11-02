@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "cache": {
+      "type": "object",
+      "properties": {
+        "ttlAll": { "type": "integer", "minimum": 10, "maximum": 86400 },
+        "ttlSearch": { "type": "integer", "minimum": 10, "maximum": 86400 }
+      },
+      "required": ["ttlAll", "ttlSearch"],
+      "additionalProperties": false
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": { "type": ["boolean", "number", "string"] }
+    }
+  },
+  "required": ["cache"],
+  "additionalProperties": true
+}

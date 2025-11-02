@@ -1,0 +1,9 @@
+{
+  "cache": {
+    "ttlAll": 300,
+    "ttlSearch": 180
+  },
+  "features": {
+    "demoMode": true
+  }
+}
