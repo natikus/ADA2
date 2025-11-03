@@ -32,6 +32,10 @@ const pool = new Pool({
   database: process.env.PGDATABASE,
   user: process.env.PGUSER,
   password: String(process.env.PGPASSWORD),
+  connectionTimeoutMillis: 5000, // Esperar 5 segundos por conexión
+  idleTimeoutMillis: 30000,      // Cerrar conexiones idle después de 30s
+  max: 10,                       // Máximo 10 conexiones
+  allowExitOnIdle: true,         // Permitir salir cuando no hay conexiones activas
 });
 
 // ---------- Cache-Aside: Redis ----------
@@ -83,7 +87,7 @@ function addCacheLog(type, message, details = {}) {
   return log;
 }
 
-// funcion helper para cache-aside
+// funcion helper para cache-aside con retry
 async function getCachedOrQuery(cacheKey, queryFn, ttlSeconds = 300) {
   const startTime = Date.now();
   try {
@@ -105,11 +109,13 @@ async function getCachedOrQuery(cacheKey, queryFn, ttlSeconds = 300) {
       };
     }
 
-    // Cache miss - ejecutar query
+    // Cache miss - ejecutar query CON RETRY
     const queryStartTime = Date.now();
     addCacheLog('MISS', `Consultando base de datos`, { cacheKey });
     console.log(`[CACHE MISS] ${cacheKey} - consultando BD...`);
-    const result = await queryFn();
+
+    // Intentar ejecutar query con retry
+    const result = await executeWithRetry(queryFn);
     const queryTime = Date.now() - queryStartTime;
 
     // guardamos en cache
@@ -140,16 +146,38 @@ async function getCachedOrQuery(cacheKey, queryFn, ttlSeconds = 300) {
       responseTime: errorTime
     });
     console.warn(`[CACHE ERROR] ${cacheKey} (${errorTime}ms):`, err.message);
-    // Fallback: ejecutar query sin caché
-    // fallback, se ejecuta el query (sin cache) si no anduvo
-    const result = await queryFn();
-    return {
-      data: result,
-      cacheStatus: 'ERROR',
-      responseTime: Date.now() - startTime,
-      error: err.message,
-      cacheKey: cacheKey
-    };
+    // Fallback: intentar ejecutar query sin caché con retry
+    try {
+      const result = await executeWithRetry(queryFn);
+      return {
+        data: result,
+        cacheStatus: 'ERROR',
+        responseTime: Date.now() - startTime,
+        error: err.message,
+        cacheKey: cacheKey
+      };
+    } catch (retryErr) {
+      // Si el retry también falla, propagar el error original
+      throw err;
+    }
+  }
+}
+
+// Función de retry genérica para queries
+async function executeWithRetry(fn, maxRetries = 3, baseDelayMs = 100) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      const canRetry = isTransientPgError(err) && attempt < maxRetries;
+      console.log(`[DB RETRY DEBUG] attempt=${attempt}, maxRetries=${maxRetries}, error_code=${err.code}, error_message=${err.message}, canRetry=${canRetry}`);
+      if (!canRetry) throw err;
+      const delay = Math.round(baseDelayMs * (2 ** attempt) * (0.5 + Math.random())); // jitter
+      attempt++;
+      console.warn(`[DB RETRY] intento ${attempt} en ${delay}ms - motivo:`, err.code || err.message);
+      await sleep(delay);
+    }
   }
 }
 
@@ -195,6 +223,16 @@ function isTransientPgError(err) {
   ]);
   if (err && (pgCodes.has(err.code))) return true;
 
+  // También considerar errores de red/DNS como transitorios
+  const networkErrorCodes = new Set([
+    'ENOTFOUND',    // DNS resolution failed
+    'ECONNREFUSED', // Connection refused
+    'ETIMEDOUT',    // Connection timed out
+    'ECONNRESET',   // Connection reset
+    'EPIPE',        // Broken pipe
+  ]);
+  if (err && (networkErrorCodes.has(err.code))) return true;
+
   const m = String(err.message || '').toLowerCase();
   return (
     m.includes('timeout') ||
@@ -209,31 +247,7 @@ function isTransientPgError(err) {
   );
 }
 
-/**
- * query con reintentos (backoff exponencial + jitter)
- * Uso: igual que pool.query(text, params)
- */
-const rawQuery = pool.query.bind(pool);
-async function queryWithRetry(text, params = [], {
-  maxRetries = 3,
-  baseDelayMs = 100
-} = {}) {
-  let attempt = 0;
-  for (;;) {
-    try {
-      return await rawQuery(text, params);
-    } catch (err) {
-      const canRetry = isTransientPgError(err) && attempt < maxRetries;
-      if (!canRetry) throw err;
-      const delay = Math.round(baseDelayMs * (2 ** attempt) * (0.5 + Math.random())); // jitter
-      attempt++;
-      console.warn(`[DB RETRY] intento ${attempt} en ${delay}ms - motivo:`, err.code || err.message);
-      await sleep(delay);
-    }
-  }
-}
-// Sobrescribimos pool.query para que TODO lo no-transaccional ya tenga reintentos
-pool.query = (text, params) => queryWithRetry(text, params);
+// Retry logic ahora se maneja en executeWithRetry dentro de getCachedOrQuery
 
 // Helper para readiness check con timeout "duro"
 async function select1WithTimeout(timeoutMs = 1500) {
