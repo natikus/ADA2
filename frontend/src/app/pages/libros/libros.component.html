@@ -1,26 +1,101 @@
-<h2>Libros</h2>
+<div class="page-background">
+  <div class="page-background-overlay"></div>
+  <div class="libros-page page">
+  <div class="libros-header">
+    <h1 class="page__title">
+      <mat-icon class="mat-icon" style="font-size: 2rem; width: 2rem; height: 2rem; vertical-align: middle; margin-right: 0.5rem;">
+        library_books
+      </mat-icon>
+      Biblioteca Digital
+    </h1>
+    <p class="meta" style="margin-top: 0.5rem; font-size: 1rem;">
+      Gestiona tu colección de libros de manera organizada y eficiente
+    </p>
+  </div>
 
-<mat-form-field appearance="outline">
-  <mat-label>Título</mat-label>
-  <input matInput [(ngModel)]="titulo">
-</mat-form-field>
+  <div class="form-container">
+    <mat-card class="form-card">
+      <mat-card-header>
+        <mat-card-title style="display: flex; align-items: center; gap: 0.5rem;">
+          <mat-icon>post_add</mat-icon>
+          Agregar Nuevo Libro
+        </mat-card-title>
+        <mat-card-subtitle>
+          Complete la información del libro para agregarlo a la biblioteca
+        </mat-card-subtitle>
+      </mat-card-header>
 
-<mat-form-field appearance="outline">
-  <mat-label>Autor</mat-label>
-  <input matInput [(ngModel)]="autor">
-</mat-form-field>
+      <mat-card-content>
+        <form class="form-grid" (ngSubmit)="crear()" #f="ngForm">
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Título del libro</mat-label>
+            <input matInput [(ngModel)]="titulo" name="titulo" required />
+            <mat-icon matSuffix>title</mat-icon>
+            <mat-hint>Ingrese el título completo del libro</mat-hint>
+          </mat-form-field>
 
-<mat-form-field appearance="outline">
-  <mat-label>Año</mat-label>
-  <input matInput type="number" [(ngModel)]="anio_publicacion">
-</mat-form-field>
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Autor</mat-label>
+            <input matInput [(ngModel)]="autor" name="autor" required />
+            <mat-icon matSuffix>person</mat-icon>
+            <mat-hint>Nombre del autor o autora</mat-hint>
+          </mat-form-field>
 
-<button mat-raised-button color="primary" (click)="crear()">Crear</button>
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Año de publicación</mat-label>
+            <input matInput type="number" [(ngModel)]="anio_publicacion" name="anio_publicacion" required />
+            <mat-icon matSuffix>calendar_today</mat-icon>
+            <mat-hint>Año en que fue publicado</mat-hint>
+          </mat-form-field>
 
-<mat-error *ngIf="error">{{error}}</mat-error>
+          <div class="center-right" style="grid-column: 1 / -1; margin-top: 1rem;">
+            <button mat-raised-button class="submit-button" type="submit" [disabled]="f.invalid">
+              <mat-icon>add</mat-icon>
+              Agregar Libro
+            </button>
+          </div>
+        </form>
 
-<mat-list>
-  <mat-list-item *ngFor="let l of libros()">
-    {{l.id_libro}} · {{l.titulo}} — {{l.autor}} ({{l.anio_publicacion}})
-  </mat-list-item>
-</mat-list>
+        <div *ngIf="error" class="error-message" style="margin-top: 1rem;">
+          <mat-icon style="vertical-align: middle; margin-right: 0.5rem;">error</mat-icon>
+          {{ error }}
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="libros-grid">
+    <mat-card *ngFor="let libro of libros(); trackBy: trackById"
+              class="libro-card">
+
+      <div class="libro-avatar">
+        <mat-icon>menu_book</mat-icon>
+      </div>
+
+      <div class="libro-info">
+        <h3>
+          <mat-icon style="font-size: 1.25rem; width: 1.25rem; height: 1.25rem;">book</mat-icon>
+          {{ libro.titulo }}
+        </h3>
+        <span class="libro-autor">{{ libro.autor }}</span>
+        <div class="libro-meta">
+          <div class="libro-meta-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">tag</mat-icon>
+            ID: {{ libro.id_libro }}
+          </div>
+        </div>
+        <span class="libro-anio">
+          <mat-icon style="font-size: 0.75rem; width: 0.75rem; height: 0.75rem; margin-right: 0.25rem;">event</mat-icon>
+          {{ libro.anio_publicacion }}
+        </span>
+      </div>
+    </mat-card>
+  </div>
+
+  <div *ngIf="!error && libros().length===0" class="empty-state">
+    <mat-icon>library_books</mat-icon>
+    <p>No hay libros en la biblioteca</p>
+    <p class="meta" style="margin-top: 0.5rem;">¡Agrega el primer libro usando el formulario de arriba!</p>
+  </div>
+  </div>
+</div>

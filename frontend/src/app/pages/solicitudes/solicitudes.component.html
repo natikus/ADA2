@@ -1,43 +1,100 @@
-<h2>Solicitudes</h2>
-<div *ngIf="error" style="color:red">{{ error }}</div>
+<div class="page-background">
+  <div class="page-background-overlay"></div>
+  <div class="solicitudes-page page">
+  <div class="solicitudes-header">
+    <h1 class="page__title">
+      <mat-icon class="mat-icon" style="font-size: 2rem; width: 2rem; height: 2rem; vertical-align: middle; margin-right: 0.5rem;">
+        assignment
+      </mat-icon>
+      Solicitudes de Préstamo
+    </h1>
+    <p class="meta" style="margin-top: 0.5rem; font-size: 1rem;">
+      Gestiona las solicitudes de préstamo de libros en tu biblioteca compartida
+    </p>
+  </div>
 
-<mat-list>
-  <mat-list-item *ngFor="let s of solicitudes(); trackBy: trackById">
-    <!-- LÍNEAS CORRECTAS PARA MAT LIST -->
-    <span matLine class="font-semibold">
-      #{{ s.id_solicitud }} · {{ s.titulo || ('Libro #' + s.id_libro) }} — {{ s.autor || 'Autor desconocido' }}
-    </span>
+  <div *ngIf="error" class="error-message">
+    <mat-icon style="vertical-align: middle; margin-right: 0.5rem;">error</mat-icon>
+    {{ error }}
+  </div>
 
-    <span matLine class="text-sm opacity-80">
-      Solicitante: <strong>{{ s.solicitante }}</strong> · Dueño: <strong>{{ s.duenio }}</strong>
-    </span>
+  <div class="solicitudes-grid">
+    <mat-card *ngFor="let solicitud of solicitudes(); trackBy: trackById"
+              class="solicitud-card">
 
-    <span matLine class="text-xs opacity-70">
-      Solicitada: {{ s.solicitada_en | date:'short' }}
-      <ng-container *ngIf="s.decidida_en">
-        · Decidida: {{ s.decidida_en | date:'short' }}
-      </ng-container>
-    </span>
+      <div class="solicitud-avatar">
+        <mat-icon>{{ solicitud.estado === 'ACEPTADA' ? 'check_circle' :
+                    solicitud.estado === 'RECHAZADA' ? 'cancel' :
+                    'schedule' }}</mat-icon>
+      </div>
 
-    <!-- Acciones + estado al extremo derecho -->
-    <span class="ml-auto flex items-center gap-2">
-      <span
-        [ngStyle]="{
-          'background': s.estado==='PENDIENTE' ? '#ffecb3' :
-                        s.estado==='ACEPTADA' ? '#c8e6c9' :
-                        s.estado==='RECHAZADA' ? '#ffcdd2' : '#e0e0e0',
-          'padding':'4px 8px','border-radius':'12px','font-size':'12px'
-        }">
-        {{ s.estado }}
-      </span>
+      <div class="solicitud-info">
+        <h3>
+          <mat-icon style="font-size: 1.25rem; width: 1.25rem; height: 1.25rem;">book</mat-icon>
+          {{ solicitud.titulo || ('Libro #' + solicitud.id_libro) }}
+        </h3>
+        <span class="solicitud-libro">{{ solicitud.autor || 'Autor desconocido' }}</span>
 
-      <ng-container *ngIf="s.estado === 'PENDIENTE'">
-        <button mat-button color="primary" (click)="aceptar(+s.id_solicitud)">Aceptar</button>
-        <button mat-button color="warn" (click)="rechazar(+s.id_solicitud)">Rechazar</button>
-      </ng-container>
-    </span>
-  </mat-list-item>
-</mat-list>
+        <span class="status-chip" [ngClass]="solicitud.estado.toLowerCase()">
+          <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem; margin-right: 0.25rem;">
+            {{ solicitud.estado === 'ACEPTADA' ? 'check_circle' :
+               solicitud.estado === 'RECHAZADA' ? 'cancel' :
+               'schedule' }}
+          </mat-icon>
+          {{ solicitud.estado }}
+        </span>
 
-<!-- Debug temporal: descomenta si querés verificar que llegan titulo/autor -->
-<!-- <pre>{{ solicitudes() | json }}</pre> -->
+        <div class="solicitud-details">
+          <div class="solicitud-detail">
+            <span class="solicitud-detail-label">ID Solicitud:</span>
+            <span class="solicitud-detail-value">#{{ solicitud.id_solicitud }}</span>
+          </div>
+          <div class="solicitud-detail">
+            <span class="solicitud-detail-label">Solicitante:</span>
+            <span class="solicitud-detail-value"><strong>{{ solicitud.solicitante }}</strong></span>
+          </div>
+          <div class="solicitud-detail">
+            <span class="solicitud-detail-label">Dueño:</span>
+            <span class="solicitud-detail-value"><strong>{{ solicitud.duenio }}</strong></span>
+          </div>
+        </div>
+
+        <div class="solicitud-fechas">
+          <div class="fecha-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">schedule</mat-icon>
+            <span>Solicitada: {{ solicitud.solicitada_en | date:'dd/MM/yyyy HH:mm' }}</span>
+          </div>
+          <div *ngIf="solicitud.decidida_en" class="fecha-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">event_available</mat-icon>
+            <span>Decidida: {{ solicitud.decidida_en | date:'dd/MM/yyyy HH:mm' }}</span>
+          </div>
+        </div>
+
+        <div class="solicitud-meta">
+          <div class="solicitud-meta-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">info</mat-icon>
+            Solicitud de préstamo pendiente de decisión
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="solicitud.estado === 'PENDIENTE'" class="acciones-container">
+        <button class="aceptar-button" (click)="aceptar(+solicitud.id_solicitud)">
+          <mat-icon>check</mat-icon>
+          <span>Aceptar</span>
+        </button>
+        <button class="rechazar-button" (click)="rechazar(+solicitud.id_solicitud)">
+          <mat-icon>close</mat-icon>
+          <span>Rechazar</span>
+        </button>
+      </div>
+    </mat-card>
+  </div>
+
+  <div *ngIf="!error && solicitudes().length===0" class="empty-state">
+    <mat-icon>assignment</mat-icon>
+    <p>No hay solicitudes de préstamo</p>
+    <p class="meta" style="margin-top: 0.5rem;">Las solicitudes aparecerán aquí cuando los usuarios soliciten prestamos de tus libros</p>
+  </div>
+  </div>
+</div>

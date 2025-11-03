@@ -1,26 +1,75 @@
-<h2>Login</h2>
+<div class="login-page">
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <h1>
+          Bienvenido de vuelta
+        </h1>
+        <p>Ingresa a tu cuenta para acceder a la biblioteca digital</p>
+      </div>
 
-<div style="margin: 12px 0;">
-  <div id="g_id_onload"
-       data-client_id="779186586574-jmgaqgkco4vk03m1pm12mns8gi38fhct.apps.googleusercontent.com"
-       data-context="signin"
-       data-callback="handleGoogleCredential"
-       data-auto_prompt="false">
+      <div class="google-login-section">
+        <div id="g_id_onload"
+             data-client_id="779186586574-jmgaqgkco4vk03m1pm12mns8gi38fhct.apps.googleusercontent.com"
+             data-context="signin"
+             data-callback="handleGoogleCredential"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="signin_with"
+             data-shape="rectangular"
+             data-logo_alignment="left">
+        </div>
+      </div>
+
+      <div class="divider">
+        <span>o</span>
+      </div>
+
+      <form class="form-section" (ngSubmit)="login()" #loginForm="ngForm">
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Correo electrónico</mat-label>
+          <input matInput
+                 [(ngModel)]="correo"
+                 name="correo"
+                 type="email"
+                 required
+                 autocomplete="email"
+                 placeholder="tu@email.com" />
+          <mat-icon matSuffix>email</mat-icon>
+          <mat-hint>Ingresa tu dirección de correo electrónico</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="form-field">
+          <mat-label>Contraseña</mat-label>
+          <input matInput
+                 [(ngModel)]="clave"
+                 name="clave"
+                 type="password"
+                 required
+                 autocomplete="current-password"
+                 placeholder="••••••••" />
+          <mat-icon matSuffix>lock</mat-icon>
+          <mat-hint>Mínimo 6 caracteres</mat-hint>
+        </mat-form-field>
+
+        <button mat-raised-button
+                class="login-button"
+                type="submit"
+                [disabled]="loginForm.invalid">
+          <mat-icon>login</mat-icon>
+          <span>Iniciar sesión</span>
+        </button>
+      </form>
+
+      <div *ngIf="error" class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ error }}</span>
+      </div>
+
+    </div>
   </div>
-  <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="signin_with" data-shape="rectangular" data-logo_alignment="left"></div>
 </div>
-
-
-<mat-form-field appearance="outline">
-  <mat-label>Correo</mat-label>
-  <input matInput [(ngModel)]="correo">
-</mat-form-field>
-
-<mat-form-field appearance="outline">
-  <mat-label>Clave</mat-label>
-  <input matInput type="password" [(ngModel)]="clave">
-</mat-form-field>
-
-<button mat-raised-button color="primary" (click)="login()">Ingresar</button>
-
-<mat-error *ngIf="error">{{error}}</mat-error>

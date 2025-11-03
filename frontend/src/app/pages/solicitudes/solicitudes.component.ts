@@ -4,12 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, Solicitud } from '../../core/api.service';
 import { MatButtonModule } from '@angular/material/button';
 import { MatListModule } from '@angular/material/list';
+import { MatIconModule } from '@angular/material/icon';
+import { MatCardModule } from '@angular/material/card';
 
 @Component({
   selector: 'app-solicitudes',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatListModule],
-  templateUrl: './solicitudes.component.html'
+  imports: [CommonModule, FormsModule, MatButtonModule, MatListModule, MatIconModule, MatCardModule],
+  templateUrl: './solicitudes.component.html',
+  styleUrls: ['./solicitudes.component.css']
 })
 export class SolicitudesComponent {
   private api = inject(ApiService);

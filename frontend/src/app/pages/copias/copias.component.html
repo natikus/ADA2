@@ -1,32 +1,89 @@
-<h2>Copias</h2>
-<div *ngIf="error" style="color:red">{{ error }}</div>
+<div class="page-background">
+  <div class="page-background-overlay"></div>
+  <div class="copias-page page">
+  <div class="copias-header">
+    <h1 class="page__title">
+      <mat-icon class="mat-icon" style="font-size: 2rem; width: 2rem; height: 2rem; vertical-align: middle; margin-right: 0.5rem;">
+        collections_bookmark
+      </mat-icon>
+      Biblioteca Compartida
+    </h1>
+    <p class="meta" style="margin-top: 0.5rem; font-size: 1rem;">
+      Explora las copias disponibles en la comunidad y solicita prestamos
+    </p>
+  </div>
 
-<div class="grid">
-  <mat-card *ngFor="let c of copias(); trackBy: trackById" class="card">
-    <div class="card-row">
-      <!-- Columna izquierda -->
-      <div class="info">
-        <div class="title">
-          {{ c.titulo || ('Libro #' + c.id_libro) }} — {{ c.autor || 'Autor desconocido' }}
-        </div>
-        <div class="sub">Dueño: <strong>{{ c.id_duenio }}</strong> · Copia #{{ c.id_copia }}</div>
-        <div class="sub">Estado: {{ c.estado }} · Visibilidad: {{ c.visibilidad }}</div>
+  <div *ngIf="error" class="error-message">
+    <mat-icon style="vertical-align: middle; margin-right: 0.5rem;">error</mat-icon>
+    {{ error }}
+  </div>
+
+  <div class="copias-grid">
+    <mat-card *ngFor="let copia of copias(); trackBy: trackById"
+              class="copia-card">
+
+      <div class="copia-avatar">
+        <mat-icon>{{ copia.disponible ? 'library_books' : 'library_books' }}</mat-icon>
       </div>
 
-      <!-- Columna derecha -->
-      <div class="actions">
-        <span class="chip" [class.ok]="c.disponible" [class.no]="!c.disponible">
-          {{ c.disponible ? 'Disponible' : 'No disponible' }}
+      <div class="copia-info">
+        <h3>
+          <mat-icon style="font-size: 1.25rem; width: 1.25rem; height: 1.25rem;">menu_book</mat-icon>
+          {{ copia.titulo || ('Libro #' + copia.id_libro) }}
+        </h3>
+        <span class="copia-libro">{{ copia.autor || 'Autor desconocido' }}</span>
+
+        <span class="status-chip" [ngClass]="copia.disponible ? 'disponible' : 'no-disponible'">
+          <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem; margin-right: 0.25rem;">
+            {{ copia.disponible ? 'check_circle' : 'cancel' }}
+          </mat-icon>
+          {{ copia.disponible ? 'Disponible' : 'No disponible' }}
         </span>
 
-        <button mat-stroked-button color="primary"
-                [disabled]="!c.disponible || c.id_duenio === currentUserId"
-                (click)="solicitar(c.id_copia)">
-          Solicitar
-        </button>
-      </div>
-    </div>
-  </mat-card>
-</div>
+        <div class="copia-details">
+          <div class="copia-detail">
+            <span class="copia-detail-label">Dueño:</span>
+            <span class="copia-detail-value">#{{ copia.id_duenio }}</span>
+          </div>
+          <div class="copia-detail">
+            <span class="copia-detail-label">Copia ID:</span>
+            <span class="copia-detail-value">#{{ copia.id_copia }}</span>
+          </div>
+          <div class="copia-detail">
+            <span class="copia-detail-label">Estado:</span>
+            <span class="copia-detail-value">{{ copia.estado }}</span>
+          </div>
+          <div class="copia-detail">
+            <span class="copia-detail-label">Visibilidad:</span>
+            <span class="copia-detail-value">{{ copia.visibilidad }}</span>
+          </div>
+        </div>
 
-<p *ngIf="!error && copias().length === 0" class="empty">No hay copias.</p>
+        <div class="copia-meta">
+          <div class="copia-meta-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">info</mat-icon>
+            Copia compartida por la comunidad
+          </div>
+        </div>
+      </div>
+
+      <button class="solicitar-button"
+              [ngClass]="{
+                'disponible': copia.disponible && copia.id_duenio !== currentUserId,
+                'propia': copia.id_duenio === currentUserId
+              }"
+              [disabled]="!copia.disponible || copia.id_duenio === currentUserId"
+              (click)="solicitar(copia.id_copia)">
+        <mat-icon>send</mat-icon>
+        <span>{{ copia.id_duenio === currentUserId ? 'Tu copia' : 'Solicitar préstamo' }}</span>
+      </button>
+    </mat-card>
+  </div>
+
+  <div *ngIf="!error && copias().length===0" class="empty-state">
+    <mat-icon>collections_bookmark</mat-icon>
+    <p>No hay copias disponibles en la biblioteca compartida</p>
+    <p class="meta" style="margin-top: 0.5rem;">¡Sé el primero en compartir una copia!</p>
+  </div>
+  </div>
+</div>

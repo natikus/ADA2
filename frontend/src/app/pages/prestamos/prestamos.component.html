@@ -1,9 +1,93 @@
-<h2>Préstamos</h2>
-<div *ngIf="error" style="color:red">{{ error }}</div>
+<div class="page-background">
+  <div class="page-background-overlay"></div>
+  <div class="prestamos-page page">
+  <div class="prestamos-header">
+    <h1 class="page__title">
+      <mat-icon class="mat-icon" style="font-size: 2rem; width: 2rem; height: 2rem; vertical-align: middle; margin-right: 0.5rem;">
+        library_add_check
+      </mat-icon>
+      Mis Préstamos
+    </h1>
+    <p class="meta" style="margin-top: 0.5rem; font-size: 1rem;">
+      Gestiona los libros que tienes prestados y realiza devoluciones
+    </p>
+  </div>
 
-<mat-list>
-  <mat-list-item *ngFor="let p of prestamos()">
-    {{p.titulo}} — {{p.autor}} · Estado: {{p.estado}}
-    <button mat-button color="warn" (click)="devolver(p.id_prestamo)">Devolver</button>
-  </mat-list-item>
-</mat-list>
+  <div *ngIf="error" class="error-message">
+    <mat-icon style="vertical-align: middle; margin-right: 0.5rem;">error</mat-icon>
+    {{ error }}
+  </div>
+
+  <div class="prestamos-grid">
+    <mat-card *ngFor="let prestamo of prestamos(); trackBy: trackById"
+              class="prestamo-card">
+
+      <div class="prestamo-avatar">
+        <mat-icon>{{ prestamo.estado === 'DEVUELTO' ? 'check_circle_outline' : 'library_books' }}</mat-icon>
+      </div>
+
+      <div class="prestamo-info">
+        <h3>
+          <mat-icon style="font-size: 1.25rem; width: 1.25rem; height: 1.25rem;">menu_book</mat-icon>
+          {{ prestamo.titulo }}
+        </h3>
+        <span class="prestamo-libro">{{ prestamo.autor }}</span>
+
+        <span class="status-chip" [ngClass]="prestamo.estado.toLowerCase()">
+          <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem; margin-right: 0.25rem;">
+            {{ prestamo.estado === 'ACTIVO' ? 'schedule' : 'check_circle' }}
+          </mat-icon>
+          {{ prestamo.estado === 'ACTIVO' ? 'En préstamo' : 'Devuelto' }}
+        </span>
+
+        <div class="prestamo-details">
+          <div class="prestamo-detail">
+            <span class="prestamo-detail-label">ID Préstamo:</span>
+            <span class="prestamo-detail-value">#{{ prestamo.id_prestamo }}</span>
+          </div>
+          <div class="prestamo-detail">
+            <span class="prestamo-detail-label">Prestatario:</span>
+            <span class="prestamo-detail-value"><strong>#{{ prestamo.id_prestatario }}</strong></span>
+          </div>
+          <div class="prestamo-detail">
+            <span class="prestamo-detail-label">Dueño:</span>
+            <span class="prestamo-detail-value"><strong>#{{ prestamo.id_duenio }}</strong></span>
+          </div>
+          <div class="prestamo-detail">
+            <span class="prestamo-detail-label">Copia:</span>
+            <span class="prestamo-detail-value">#{{ prestamo.id_copia }}</span>
+          </div>
+        </div>
+
+        <div class="prestamo-fechas">
+          <div class="fecha-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">today</mat-icon>
+            <span>Inicio: {{ prestamo.fecha_inicio | date:'dd/MM/yyyy' }}</span>
+          </div>
+          <div class="fecha-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">event</mat-icon>
+            <span>Vence: {{ prestamo.fecha_vencimiento | date:'dd/MM/yyyy' }}</span>
+          </div>
+          <div *ngIf="prestamo.fecha_devolucion" class="fecha-item">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem;">event_available</mat-icon>
+            <span>Devuelto: {{ prestamo.fecha_devolucion | date:'dd/MM/yyyy' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <button *ngIf="prestamo.estado === 'ACTIVO'"
+              class="devolver-button"
+              (click)="devolver(prestamo.id_prestamo)">
+        <mat-icon>undo</mat-icon>
+        <span>Devolver libro</span>
+      </button>
+    </mat-card>
+  </div>
+
+  <div *ngIf="!error && prestamos().length===0" class="empty-state">
+    <mat-icon>library_add_check</mat-icon>
+    <p>No tienes préstamos activos</p>
+    <p class="meta" style="margin-top: 0.5rem;">Cuando solicites y te aprueben libros, aparecerán aquí</p>
+  </div>
+  </div>
+</div>

@@ -1,56 +1,118 @@
-<div class="page">
-  <h2 class="page__title">Usuarios</h2>
+<div class="page-background">
+  <div class="page-background-overlay"></div>
+  <div class="usuarios-page page">
+  <!-- Header con título -->
+  <div class="usuarios-header">
+    <h1 class="page__title">
+      <mat-icon class="mat-icon" style="font-size: 2rem; width: 2rem; height: 2rem; vertical-align: middle; margin-right: 0.5rem;">
+        group
+      </mat-icon>
+      Gestión de Usuarios
+    </h1>
+    <p class="meta" style="margin-top: 0.5rem; font-size: 1rem;">
+      Administra los usuarios del sistema de manera eficiente
+    </p>
+  </div>
 
-  <!-- Card del formulario -->
-  <mat-card class="card">
-    <form (ngSubmit)="crear()" #f="ngForm" class="row" style="flex-wrap: wrap; gap:12px;">
-      <mat-form-field appearance="outline" class="field">
-        <mat-label>Correo</mat-label>
-        <input matInput type="email" [(ngModel)]="correo" name="correo" required autocomplete="email" />
-      </mat-form-field>
+  <!-- Formulario de creación -->
+  <div class="form-container">
+    <mat-card class="form-card">
+      <mat-card-header>
+        <mat-card-title style="display: flex; align-items: center; gap: 0.5rem;">
+          <mat-icon>person_add</mat-icon>
+          Crear Nuevo Usuario
+        </mat-card-title>
+        <mat-card-subtitle>
+          Complete todos los campos para registrar un nuevo usuario en el sistema
+        </mat-card-subtitle>
+      </mat-card-header>
 
-      <mat-form-field appearance="outline" class="field">
-        <mat-label>Clave</mat-label>
-        <input matInput type="password" [(ngModel)]="clave" name="clave" required autocomplete="new-password" />
-      </mat-form-field>
+      <mat-card-content>
+        <form (ngSubmit)="crear()" #f="ngForm" class="form-grid">
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Correo electrónico</mat-label>
+            <input matInput type="email" [(ngModel)]="correo" name="correo" required autocomplete="email" />
+            <mat-icon matSuffix>email</mat-icon>
+            <mat-hint>Ingrese un correo válido</mat-hint>
+          </mat-form-field>
 
-      <mat-form-field appearance="outline" class="field">
-        <mat-label>Nombre a mostrar</mat-label>
-        <input matInput [(ngModel)]="nombre_mostrar" name="nombre_mostrar" required />
-      </mat-form-field>
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Contraseña</mat-label>
+            <input matInput type="password" [(ngModel)]="clave" name="clave" required autocomplete="new-password" />
+            <mat-icon matSuffix>lock</mat-icon>
+            <mat-hint>Mínimo 6 caracteres</mat-hint>
+          </mat-form-field>
 
-      <div class="center-right" style="width:100%; margin-top:4px;">
-        <button mat-raised-button color="primary" [disabled]="f.invalid">Crear usuario</button>
-      </div>
-    </form>
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Nombre a mostrar</mat-label>
+            <input matInput [(ngModel)]="nombre_mostrar" name="nombre_mostrar" required />
+            <mat-icon matSuffix>badge</mat-icon>
+            <mat-hint>Este nombre será visible para otros usuarios</mat-hint>
+          </mat-form-field>
 
-    <mat-error *ngIf="error" style="margin-top:8px;">{{ error }}</mat-error>
-  </mat-card>
+          <div class="center-right" style="grid-column: 1 / -1; margin-top: 1rem;">
+            <button mat-raised-button class="submit-button" [disabled]="f.invalid">
+              <mat-icon>add</mat-icon>
+              Crear Usuario
+            </button>
+          </div>
+        </form>
+
+        <!-- Mensajes de error/éxito -->
+        <div *ngIf="error" class="error-message" style="margin-top: 1rem;">
+          <mat-icon style="vertical-align: middle; margin-right: 0.5rem;">error</mat-icon>
+          {{ error }}
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
 
   <!-- Grid de usuarios -->
-  <div class="grid">
-    <mat-card *ngFor="let u of usuarios(); trackBy: trackById" class="card">
-      <div class="card__row">
-        <div class="card__left">
-          <div class="title">
-            <mat-icon inline>person</mat-icon>
-            {{ u.nombre_mostrar }}
-          </div>
-          <div class="meta">{{ u.correo }}</div>
-          <div class="small">
-            ID: {{ u.id_usuario }}
-            <ng-container *ngIf="u.creado_en"> · Creado: {{ u.creado_en | date:'short' }}</ng-container>
-          </div>
-        </div>
+  <div class="usuarios-grid">
+    <mat-card *ngFor="let u of usuarios(); trackBy: trackById"
+              class="usuario-card">
 
-        <div class="card__right">
-          <span class="chip" [ngClass]="u.activo ? 'chip--ok' : 'chip--bad'">
-            {{ u.activo ? 'Activo' : 'Inactivo' }}
-          </span>
+      <!-- Avatar del usuario -->
+      <div class="usuario-avatar">
+        <mat-icon>{{ u.activo ? 'person' : 'person_off' }}</mat-icon>
+      </div>
+
+      <!-- Información del usuario -->
+      <div class="usuario-info">
+        <h3>
+          <mat-icon style="font-size: 1.25rem; width: 1.25rem; height: 1.25rem;">account_circle</mat-icon>
+          {{ u.nombre_mostrar }}
+        </h3>
+        <span class="usuario-email">{{ u.correo }}</span>
+        <div class="usuario-meta">
+          <div style="margin-bottom: 0.25rem;">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem; vertical-align: middle; margin-right: 0.25rem;">tag</mat-icon>
+            ID: {{ u.id_usuario }}
+          </div>
+          <div *ngIf="u.creado_en">
+            <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem; vertical-align: middle; margin-right: 0.25rem;">schedule</mat-icon>
+            Creado: {{ u.creado_en | date:'dd/MM/yyyy HH:mm' }}
+          </div>
         </div>
+      </div>
+
+      <!-- Estado del usuario -->
+      <div style="margin-top: 1rem;">
+        <span class="status-chip" [ngClass]="u.activo ? 'activo' : 'inactivo'">
+          <mat-icon style="font-size: 0.875rem; width: 0.875rem; height: 0.875rem; margin-right: 0.25rem;">
+            {{ u.activo ? 'check_circle' : 'cancel' }}
+          </mat-icon>
+          {{ u.activo ? 'Activo' : 'Inactivo' }}
+        </span>
       </div>
     </mat-card>
   </div>
 
-  <p *ngIf="!error && usuarios().length===0" class="small mt-12">No hay usuarios.</p>
+  <!-- Estado vacío -->
+  <div *ngIf="!error && usuarios().length===0" class="empty-state">
+    <mat-icon>people_outline</mat-icon>
+    <p>No hay usuarios registrados en el sistema</p>
+    <p class="meta" style="margin-top: 0.5rem;">¡Crea el primer usuario usando el formulario de arriba!</p>
+  </div>
+  </div>
 </div>

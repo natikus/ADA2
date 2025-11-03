@@ -24,7 +24,8 @@ import { MatListModule } from '@angular/material/list';
     MatIconModule,
     MatCardModule
   ],
-  templateUrl: './usuarios.component.html'
+  templateUrl: './usuarios.component.html',
+  styleUrls: ['./usuarios.component.css']
 })
 export class UsuariosComponent {
   private api = inject(ApiService);
