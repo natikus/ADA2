@@ -90,6 +90,7 @@ const allowlist = [
   { method: 'GET', path: /^\/(healthz|readyz|cachez|cachelogs|cqrsz)$/ },
   { method: 'GET', path: /^\/(usuarios|libros|copias|solicitudes|prestamos)(\/.*)?$/ },
   { method: 'POST', path: /^\/(usuarios|libros|copias|solicitudes)(\/.*)?$/ },
+  { method: 'POST', path: /^\/login$/ },
   { method: 'POST', path: /^\/prestamos\/[0-9]+\/devolver$/ },
   { method: 'POST', path: /^\/solicitudes\/[0-9]+\/(aceptar|rechazar)$/ },
   { method: 'POST', path: /^\/auth\/google\/callback$/ },
@@ -97,16 +98,25 @@ const allowlist = [
 ];
 
 app.use((req, res, next) => {
-  const ok = allowlist.some(rule => rule.method === req.method && rule.path.test(req.path));
-  if (!ok) { blockedCount++; return res.status(405).json({ error: 'method or path not allowed' }); }
+  console.log(`[ALLOWLIST] ${req.method} ${req.path}`);
+  const ok = allowlist.some(rule => {
+    const match = rule.method === req.method && rule.path.test(req.path);
+    if (match) console.log(`[ALLOWLIST] ✓ Matched rule: ${rule.method} ${rule.path}`);
+    return match;
+  });
+  if (!ok) {
+    console.log(`[ALLOWLIST] ✗ BLOCKED ${req.method} ${req.path}`);
+    blockedCount++;
+    return res.status(405).json({ error: 'method or path not allowed' });
+  }
   next();
 });
 
-// health endpoints del gatekeeper
+// health endpoints del gatekeeper (registrar ANTES del proxy para que matcheen primero)
 app.get('/healthz', (_req, res) => { res.json({ status: 'ok', now: new Date().toISOString() }); });
 app.get('/readyz', async (_req, res) => {
   try {
-    const r = await fetch().then(r=>r.json());
+    const r = await fetch(`${TARGET}/healthz`).then(r=>r.json());
     res.json({ status: 'ready', backend: r });
   } catch (e) { res.status(503).json({ status: 'not-ready', error: String(e) }); }
 });
@@ -115,12 +125,24 @@ app.get('/gatekeeperz', (_req, res) => {
   res.json({ passed: passedCount, blocked: blockedCount, target: TARGET, cors_allowed: ALLOWED_ORIGINS });
 });
 
-// proxy
+// proxy para todo lo demás
 const proxy = createProxyMiddleware({
   target: TARGET,
   changeOrigin: true,
   xfwd: true,
-  onProxyReq: (_proxyReq, _req, _res) => { passedCount++; },
+  timeout: 10000,
+  proxyTimeout: 10000,
+  onProxyReq: (proxyReq, req, _res) => {
+    passedCount++;
+    console.log(`[PROXY] ${req.method} ${req.path} -> ${TARGET}${req.path}`);
+  },
+  onProxyRes: (proxyRes, req, _res) => {
+    console.log(`[PROXY] ${req.method} ${req.path} <- ${proxyRes.statusCode}`);
+  },
+  onError: (err, req, res) => {
+    console.error(`[PROXY ERROR] ${req.method} ${req.path}:`, err.message);
+    res.status(502).json({ error: 'Proxy error', details: err.message });
+  }
 });
 
 app.use('/', proxy);

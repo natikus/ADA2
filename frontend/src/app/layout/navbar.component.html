@@ -8,6 +8,12 @@
     <a mat-button routerLink="/copias">Copias</a>
     <a mat-button routerLink="/solicitudes">Solicitudes</a>
     <a mat-button routerLink="/prestamos">Préstamos</a>
-    <a mat-button routerLink="/login">Login</a>
+    
+    @if (auth.isLogged()) {
+      <span style="margin: 0 1rem;">Hola, {{ auth.user()?.nombre_mostrar }}</span>
+      <button mat-button (click)="logout()">Cerrar sesión</button>
+    } @else {
+      <a mat-button routerLink="/login">Login</a>
+    }
   </mat-toolbar>
   

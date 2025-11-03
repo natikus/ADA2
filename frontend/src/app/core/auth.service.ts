@@ -6,14 +6,33 @@ export interface SessionUser { id_usuario:number; correo:string; nombre_mostrar:
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-user = signal<SessionUser|null>(this.load());
+  user = signal<SessionUser|null>(this.load());
 
+  private load(): SessionUser|null {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  }
 
-private load(): SessionUser|null {
-const raw = localStorage.getItem('user');
-return raw ? JSON.parse(raw) : null;
-}
-setUser(u:SessionUser){ localStorage.setItem('user', JSON.stringify(u)); this.user.set(u); }
-clear(){ localStorage.removeItem('user'); this.user.set(null); }
-isLogged(){ return !!this.user(); }
+  setUser(u:SessionUser){ 
+    localStorage.setItem('user', JSON.stringify(u)); 
+    this.user.set(u); 
+  }
+
+  setToken(token: string) {
+    localStorage.setItem('api_jwt', token);
+  }
+
+  getToken(): string | null {
+    return localStorage.getItem('api_jwt');
+  }
+
+  clear(){ 
+    localStorage.removeItem('user'); 
+    localStorage.removeItem('api_jwt');
+    this.user.set(null); 
+  }
+
+  isLogged(){ 
+    return !!this.user(); 
+  }
 }

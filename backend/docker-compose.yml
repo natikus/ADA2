@@ -65,6 +65,8 @@ services:
       - PGUSER=postgres
       - PGPASSWORD=postgres
       - REDIS_URL=redis://redis:6379
+      - GOOGLE_CLIENT_ID=779186586574-jmgaqgkco4vk03m1pm12mns8gi38fhct.apps.googleusercontent.com
+      - JWT_SECRET=dev-secret-change-me-in-production
     depends_on:
       postgres:
         condition: service_healthy
