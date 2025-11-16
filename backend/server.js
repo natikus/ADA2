@@ -24,6 +24,13 @@ dotenv.config();
 const { Pool } = pkg;
 
 const app = express();
+app.use((req, res, next) => {
+  if (req.headers['postman-token']) {
+    delete req.headers['postman-token'];
+  }
+  next();
+});
+
 app.use(express.json());
 
 const pool = new Pool({
@@ -324,6 +331,70 @@ app.post("/login", async (req, res) => {
 // ---------------------------
 // Libros
 // ---------------------------
+
+// ---------- Endpoint SOAP de ejemplo (XML) ----------
+
+// Solo para este endpoint, queremos leer el body como texto (XML)
+app.post(
+  "/soap/libros",
+  express.text({ type: ["text/xml", "application/soap+xml", "text/plain"] }),
+  async (req, res) => {
+    try {
+      // Si quisieras, acá podrías inspeccionar req.body (XML que mandó el cliente)
+      // Por simplicidad, lo ignoramos y siempre devolvemos todos los libros.
+
+      const libros = await queryBus.execute({
+        type: "OBTENER_LIBROS",
+        filters: {}
+      });
+
+      // Armamos la parte de libros en XML
+      const librosXml = libros
+        .map((libro) => {
+          return `
+            <ns:libro>
+              <ns:id>${libro.id_libro}</ns:id>
+              <ns:titulo>${libro.titulo}</ns:titulo>
+              <ns:autor>${libro.autor}</ns:autor>
+              ${libro.anio_publicacion ? `<ns:anioPublicacion>${libro.anio_publicacion}</ns:anioPublicacion>` : ""}
+            </ns:libro>
+          `;
+        })
+        .join("");
+
+      const soapResponse = `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="http://biblioteca.com/soap">
+          <soap:Body>
+            <ns:ListarLibrosResponse>
+              ${librosXml}
+            </ns:ListarLibrosResponse>
+          </soap:Body>
+        </soap:Envelope>
+      `.trim();
+
+      res.set("Content-Type", "text/xml");
+      res.status(200).send(soapResponse);
+    } catch (e) {
+      console.error("[SOAP /soap/libros] error:", e.message);
+
+      const fault = `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+          <soap:Body>
+            <soap:Fault>
+              <faultcode>soap:Server</faultcode>
+              <faultstring>Error al obtener libros</faultstring>
+            </soap:Fault>
+          </soap:Body>
+        </soap:Envelope>
+      `.trim();
+
+      res.set("Content-Type", "text/xml");
+      res.status(500).send(fault);
+    }
+  }
+);
 
 // Crear libro (CQRS)
 app.post("/libros", async (req, res) => {

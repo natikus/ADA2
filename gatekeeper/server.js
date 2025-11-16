@@ -137,7 +137,8 @@ const allowlist = [
   { method: 'POST', path: /^\/prestamos\/[0-9]+\/devolver$/ },
   { method: 'POST', path: /^\/solicitudes\/[0-9]+\/(aceptar|rechazar)$/ },
   { method: 'POST', path: /^\/auth\/google\/callback$/ },
-  { method: 'GET', path: /^\/whoami$/ }
+  { method: 'GET', path: /^\/whoami$/ },
+  { method: 'POST', path: /^\/soap\/libros$/ }
 ];
 
 app.use((req, res, next) => {
